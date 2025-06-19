@@ -118,9 +118,8 @@ const AuthScreen = ({ onAuthSuccess }) => {
     setPassword('');
     setConfirmPassword('');
   };
-
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <LinearGradient
         colors={['#3B82F6', '#1D4ED8']}
         style={styles.gradient}

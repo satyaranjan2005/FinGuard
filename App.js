@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AppNavigator from './src/navigation/AppNavigator';
 import AuthScreen from './src/screens/AuthScreen';
 import { authService } from './src/services/authService';
@@ -71,13 +72,13 @@ export default function App() {
   }
 
   return (
-    <>
+    <SafeAreaProvider>
       {isAuthenticated ? (
         <AppNavigator user={user} onLogout={handleLogout} />
       ) : (
         <AuthScreen onAuthSuccess={handleAuthSuccess} />
       )}
-      <StatusBar style="auto" />
-    </>
+      <StatusBar style="auto" translucent backgroundColor="transparent" />
+    </SafeAreaProvider>
   );
 }

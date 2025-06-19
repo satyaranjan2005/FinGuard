@@ -7,7 +7,8 @@ import {
   StyleSheet,
   ActivityIndicator,
   Dimensions,
-  RefreshControl
+  RefreshControl,
+  StatusBar
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -208,11 +209,10 @@ const AnalyticsScreen = ({ navigation }) => {
         </View>
       </View>
     );
-  };
-
-  if (loading) {
+  };  if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+        <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#3b82f6" />
           <Text style={styles.loadingText}>Analyzing your spending...</Text>
@@ -220,9 +220,9 @@ const AnalyticsScreen = ({ navigation }) => {
       </SafeAreaView>
     );
   }
-
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       {/* Header */}
       <LinearGradient
         colors={['#8b5cf6', '#7c3aed']}

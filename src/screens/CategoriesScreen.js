@@ -170,8 +170,8 @@ const CategoriesScreen = () => {
         </View>
       </Card>
     </TouchableOpacity>
-  );return (
-    <SafeAreaView style={styles.container}>
+  );  return (
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
       {/* Header with updated modern design */}
       <LinearGradient
         colors={colors.gradients.categories}

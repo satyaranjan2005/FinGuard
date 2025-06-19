@@ -17,7 +17,8 @@ ScrollView,
 TouchableOpacity, 
 ActivityIndicator,
 RefreshControl,
-Alert
+Alert,
+StatusBar
 } from 'react-native';
 
 const DashboardScreen = ({ navigation }) => {
@@ -78,7 +79,8 @@ if (loading && !refreshing) {
 }
 
 return (
-  <SafeAreaView style={styles.container} edges={['top']}>
+  <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
+    <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
     {/* Modern blue gradient header with balance card */}
     <LinearGradient
       colors={colors.gradients.balance}

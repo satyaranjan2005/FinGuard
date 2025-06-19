@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Alert, StyleSheet, Dimensions, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Alert, StyleSheet, Dimensions, ActivityIndicator, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -143,10 +143,9 @@ const BudgetScreen = () => {
   };
 
   const overview = getTotalBudgetOverview();
-  const currentMonth = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });  
-  
-  return (
-    <SafeAreaView style={styles.container}>
+  const currentMonth = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });    return (
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       {/* Header with modern design */}
       <LinearGradient
         colors={colors.gradients.budget}

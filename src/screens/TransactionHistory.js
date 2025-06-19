@@ -5,13 +5,15 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  SafeAreaView,
   StatusBar,
   Alert,
   RefreshControl,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import colors from '../utils/colors';
 
 const TransactionHistoryScreen = ({ navigation }) => {
 const [transactions, setTransactions] = useState([]);
@@ -85,7 +87,7 @@ const formatDate = (dateString) => {
 
 const formatAmount = (amount, type) => {
   const formattedAmount = Math.abs(amount).toFixed(2);
-  return type === 'expense' ? `-$${formattedAmount}` : `+$${formattedAmount}`;
+  return type === 'expense' ? `-₹${formattedAmount}` : `+₹${formattedAmount}`;
 };
 
 const getCategoryIcon = (category) => {
@@ -183,24 +185,31 @@ const renderEmptyState = () => (
 );
 
 return (
-  <SafeAreaView style={styles.container}>
-    <StatusBar barStyle="dark-content" backgroundColor="#F8F9FA" />
+  <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
+    <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
     
-    <View style={styles.header}>
-      <TouchableOpacity
-        onPress={() => navigation.goBack()}
-        accessibilityLabel="Go back"
-      >
-        <Ionicons name="arrow-back" size={24} color="#2C3E50" />
-      </TouchableOpacity>
-      <Text style={styles.headerTitle}>Transaction History</Text>
-      <TouchableOpacity
-        onPress={() => navigation.navigate('AddTransaction')}
-        accessibilityLabel="Add new transaction"
-      >
-        <Ionicons name="add" size={24} color="#4A90E2" />
-      </TouchableOpacity>
-    </View>
+    {/* Modern gradient header */}
+    <LinearGradient
+      colors={colors?.gradients?.transactions || ['#f59e0b', '#d97706']}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 0 }}
+      style={styles.header}
+    >
+      <View style={styles.headerContent}>
+        <View style={styles.headerLeft}>
+          <Ionicons name="time" size={28} color="white" style={styles.headerIcon} />
+          <Text style={styles.headerTitle}>Transaction History</Text>
+        </View>        <View style={styles.headerRight}>
+          <TouchableOpacity 
+            style={styles.headerButton} 
+            onPress={() => navigation.navigate('Add')}
+            accessibilityLabel="Add new transaction"
+          >
+            <Ionicons name="add-outline" size={22} color="white" />
+          </TouchableOpacity>
+        </View>
+      </View>      <Text style={styles.headerSubtitle}>Track and manage your transactions</Text>
+    </LinearGradient>
 
     {renderCategoryFilter()}
 
@@ -222,28 +231,65 @@ return (
 const styles = StyleSheet.create({
 container: {
   flex: 1,
-  backgroundColor: '#F8F9FA',
+  backgroundColor: colors?.background || '#f8fafc',
 },
 header: {
+  paddingHorizontal: 16,
+  paddingVertical: 16,
+  paddingTop: 20,
+  paddingBottom: 24,
+  borderBottomLeftRadius: 24,
+  borderBottomRightRadius: 24,
+  elevation: 8,
+  shadowColor: colors?.warning?.main || '#f59e0b',
+  shadowOffset: { width: 0, height: 4 },
+  shadowOpacity: 0.3,
+  shadowRadius: 6,
+},
+headerContent: {
   flexDirection: 'row',
-  justifyContent: 'space-between',
   alignItems: 'center',
-  paddingHorizontal: 20,
-  paddingVertical: 15,
-  backgroundColor: '#FFFFFF',
-  borderBottomWidth: 1,
-  borderBottomColor: '#E5E5E5',
+  justifyContent: 'space-between',
+  marginBottom: 4,
+},
+headerLeft: {
+  flexDirection: 'row',
+  alignItems: 'center',
+},
+headerRight: {
+  flexDirection: 'row',
+  alignItems: 'center',
+},
+headerButton: {
+  width: 36,
+  height: 36,
+  alignItems: 'center',
+  justifyContent: 'center',
+  backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  borderRadius: 18,
+},
+headerIcon: {
+  marginRight: 10,
 },
 headerTitle: {
-  fontSize: 18,
-  fontWeight: '600',
-  color: '#2C3E50',
+  color: 'white',
+  fontSize: 22,
+  fontWeight: '700',
+},
+headerSubtitle: {
+  color: 'rgba(255, 255, 255, 0.85)',
+  fontSize: 14,
+  fontWeight: '400',
 },
 filterContainer: {
-  paddingVertical: 15,
-  backgroundColor: '#FFFFFF',
+  paddingVertical: 16,
+  paddingHorizontal: 16,
+  backgroundColor: colors?.surface || '#ffffff',
   borderBottomWidth: 1,
-  borderBottomColor: '#E5E5E5',
+  borderBottomColor: '#e5e7eb',
+  marginTop: -12,
+  borderTopLeftRadius: 16,
+  borderTopRightRadius: 16,
 },
 filterButton: {
   paddingHorizontal: 16,
@@ -251,28 +297,30 @@ filterButton: {
   marginHorizontal: 4,
   marginLeft: 16,
   borderRadius: 20,
-  backgroundColor: '#F8F9FA',
+  backgroundColor: '#f1f5f9',
   borderWidth: 1,
-  borderColor: '#E5E5E5',
+  borderColor: '#e2e8f0',
 },
 filterButtonActive: {
-  backgroundColor: '#4A90E2',
-  borderColor: '#4A90E2',
+  backgroundColor: colors?.warning?.main || '#f59e0b',
+  borderColor: colors?.warning?.main || '#f59e0b',
 },
 filterText: {
   fontSize: 14,
-  color: '#7F8C8D',
+  color: colors?.text?.secondary || '#6b7280',
   fontWeight: '500',
 },
 filterTextActive: {
-  color: '#FFFFFF',
+  color: 'white',
+  fontWeight: '600',
 },
 listContainer: {
   padding: 16,
+  paddingBottom: 100, // Add extra space for bottom tab navigation
   flexGrow: 1,
 },
 transactionCard: {
-  backgroundColor: '#FFFFFF',
+  backgroundColor: colors?.surface || '#ffffff',
   borderRadius: 12,
   padding: 16,
   marginBottom: 12,

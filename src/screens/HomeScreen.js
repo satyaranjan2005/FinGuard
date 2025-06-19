@@ -16,9 +16,8 @@ const HomeScreen = () => {
     }    Alert.alert('Success', `Added expense: ₹${amount} for ${description}`);
     setAmount('');
     setDescription('');
-  };
-  return (
-    <SafeAreaView style={styles.container}>
+  };  return (
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
         {/* Header */}        <LinearGradient
           colors={['#10b981', '#059669']}

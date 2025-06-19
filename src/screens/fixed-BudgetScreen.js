@@ -144,9 +144,8 @@ const BudgetScreen = () => {
 
   const overview = getTotalBudgetOverview();
   const currentMonth = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });  
-  
-  return (
-    <SafeAreaView style={styles.container}>
+    return (
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       {/* Header with modern design */}
       <LinearGradient
         colors={colors.gradients.budget}
