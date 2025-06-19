@@ -1,0 +1,28 @@
+{
+  "settings": {
+    "emmet.includeLanguages": {
+      "javascript": "javascriptreact"
+    },
+    "tailwindCSS.includeLanguages": {
+      "javascript": "javascript",
+      "javascriptreact": "javascriptreact"
+    },
+    "tailwindCSS.experimental.classRegex": [
+      "className\\s*=\\s*[\"'`]([^\"'`]*)[\"'`]"
+    ],
+    "editor.quickSuggestions": {
+      "strings": true
+    },
+    "css.validate": false,
+    "scss.validate": false,
+    "less.validate": false
+  },
+  "extensions": {
+    "recommendations": [
+      "bradlc.vscode-tailwindcss",
+      "ms-vscode.vscode-typescript-next",
+      "esbenp.prettier-vscode",
+      "ms-vscode.vscode-eslint"
+    ]
+  }
+}
