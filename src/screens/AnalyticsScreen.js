@@ -8,9 +8,11 @@ import {
   ActivityIndicator,
   Dimensions,
   RefreshControl,
-  StatusBar
+  StatusBar,
+  Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { getSpendingAnalytics, getFinancialInsights } from '../services/dataService';
@@ -30,10 +32,16 @@ const AnalyticsScreen = ({ navigation }) => {
     { label: '30 Days', value: 30 },
     { label: '90 Days', value: 90 },
   ];
-
   useEffect(() => {
     loadAnalytics();
   }, [selectedPeriod]);
+
+  // Refresh data when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      loadAnalytics();
+    }, [selectedPeriod])
+  );
 
   const loadAnalytics = async () => {
     try {
@@ -42,19 +50,52 @@ const AnalyticsScreen = ({ navigation }) => {
         getSpendingAnalytics(selectedPeriod),
         getFinancialInsights()
       ]);
-      setAnalytics(analyticsData);
-      setInsights(insightsData);
+      
+      // Ensure we have valid data structures
+      setAnalytics(analyticsData || {
+        totalSpent: 0,
+        dailyAverage: 0,
+        weeklyAverage: 0,
+        transactionCount: 0,
+        topCategories: []
+      });
+      
+      setInsights(insightsData || {
+        savingsRate: 0,
+        totalIncome: 0,
+        totalExpenses: 0,
+        monthlyAverage: { income: 0, expenses: 0 },
+        goalProgress: { target: 100000, current: 0, percentage: 0 },
+        topCategories: []
+      });
     } catch (error) {
       console.error('Error loading analytics:', error);
+      Alert.alert('Error', 'Failed to load analytics data. Please try again.');
+      
+      // Set default empty state
+      setAnalytics({
+        totalSpent: 0,
+        dailyAverage: 0,
+        weeklyAverage: 0,
+        transactionCount: 0,
+        topCategories: []
+      });
+      setInsights({
+        savingsRate: 0,
+        totalIncome: 0,
+        totalExpenses: 0,
+        monthlyAverage: { income: 0, expenses: 0 },
+        goalProgress: { target: 100000, current: 0, percentage: 0 },
+        topCategories: []
+      });
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
-
-  const onRefresh = () => {
+  const onRefresh = async () => {
     setRefreshing(true);
-    loadAnalytics();
+    await loadAnalytics();
   };
 
   const formatCurrency = (amount) => {
@@ -81,9 +122,24 @@ const AnalyticsScreen = ({ navigation }) => {
       ))}
     </View>
   );
-
   const renderInsightsCard = () => {
-    if (!insights) return null;
+    if (!insights) {
+      return (
+        <LinearGradient
+          colors={['#10b981', '#059669']}
+          style={styles.insightsCard}
+        >
+          <View style={styles.insightsHeader}>
+            <Ionicons name="trending-up" size={28} color="white" />
+            <Text style={styles.insightsTitle}>Financial Health</Text>
+          </View>
+          
+          <View style={styles.emptyState}>
+            <Text style={[styles.emptyStateText, { color: 'white' }]}>Loading financial insights...</Text>
+          </View>
+        </LinearGradient>
+      );
+    }
 
     return (
       <LinearGradient
@@ -98,21 +154,21 @@ const AnalyticsScreen = ({ navigation }) => {
         <View style={styles.insightsGrid}>
           <View style={styles.insightItem}>
             <Text style={styles.insightValue}>
-              {insights.savingsRate.toFixed(1)}%
+              {(insights.savingsRate || 0).toFixed(1)}%
             </Text>
             <Text style={styles.insightLabel}>Savings Rate</Text>
           </View>
           
           <View style={styles.insightItem}>
             <Text style={styles.insightValue}>
-              {formatCurrency(insights.monthlyAverage.income)}
+              {formatCurrency(insights.monthlyAverage?.income || 0)}
             </Text>
             <Text style={styles.insightLabel}>Avg Income</Text>
           </View>
           
           <View style={styles.insightItem}>
             <Text style={styles.insightValue}>
-              {formatCurrency(insights.monthlyAverage.expenses)}
+              {formatCurrency(insights.monthlyAverage?.expenses || 0)}
             </Text>
             <Text style={styles.insightLabel}>Avg Expenses</Text>
           </View>
@@ -124,51 +180,75 @@ const AnalyticsScreen = ({ navigation }) => {
             <View 
               style={[
                 styles.goalProgressFill,
-                { width: `${Math.min(insights.goalProgress.percentage, 100)}%` }
+                { width: `${Math.min(insights.goalProgress?.percentage || 0, 100)}%` }
               ]}
             />
           </View>
           <Text style={styles.goalText}>
-            {formatCurrency(insights.goalProgress.current)} of {formatCurrency(insights.goalProgress.target)}
+            {formatCurrency(insights.goalProgress?.current || 0)} of {formatCurrency(insights.goalProgress?.target || 100000)}
           </Text>
         </View>
       </LinearGradient>
     );
   };
+  const renderTopCategories = () => {
+    if (!analytics?.topCategories || !Array.isArray(analytics.topCategories) || analytics.topCategories.length === 0) {
+      return (
+        <View style={styles.categoriesCard}>
+          <Text style={styles.cardTitle}>Top Spending Categories</Text>
+          <View style={styles.emptyState}>
+            <Ionicons name="analytics-outline" size={48} color={colors.neutral[400]} />
+            <Text style={styles.emptyStateText}>No spending data available</Text>
+            <Text style={styles.emptyStateSubtext}>Start adding transactions to see analytics</Text>
+          </View>
+        </View>
+      );
+    }
 
-  const renderTopCategories = () => {    if (!analytics?.topCategories || !Array.isArray(analytics.topCategories)) return null;    return (
+    return (
       <View style={styles.categoriesCard}>
         <Text style={styles.cardTitle}>Top Spending Categories</Text>
-        {analytics && Array.isArray(analytics.topCategories) ? analytics.topCategories.map((category, index) => {
+        {analytics.topCategories.map((category, index) => {
           // Safety check for category object
           if (!category || typeof category !== 'object') {
             return null;
           }
           
           return (
-          <View key={index} style={styles.categoryItem}>
-            <View style={styles.categoryInfo}>
-              <View style={styles.categoryRank}>
-                <Text style={styles.rankText}>{index + 1}</Text>
+            <View key={`category-${index}`} style={styles.categoryItem}>
+              <View style={styles.categoryInfo}>
+                <View style={styles.categoryRank}>
+                  <Text style={styles.rankText}>{index + 1}</Text>
+                </View>
+                <Text style={styles.categoryName}>{category.category || 'Unknown'}</Text>
               </View>
-              <Text style={styles.categoryName}>{category.category || 'Unknown'}</Text>
+              <View style={styles.categoryAmount}>
+                <Text style={styles.categoryAmountText}>
+                  {formatCurrency(category.amount || 0)}
+                </Text>
+                <Text style={styles.categoryPercentage}>
+                  {(category.percentage || 0).toFixed(1)}%
+                </Text>
+              </View>
             </View>
-            <View style={styles.categoryAmount}>
-              <Text style={styles.categoryAmountText}>
-                {formatCurrency(category.amount || 0)}
-              </Text>
-              <Text style={styles.categoryPercentage}>
-                {(category.percentage || 0).toFixed(1)}%
-              </Text>
-            </View>          </View>
           );
-        }).filter(Boolean) : null}
+        }).filter(Boolean)}
       </View>
     );
   };
-
   const renderSpendingOverview = () => {
-    if (!analytics) return null;
+    if (!analytics) {
+      return (
+        <View style={styles.overviewCard}>
+          <Text style={styles.cardTitle}>Spending Overview</Text>
+          <View style={styles.emptyState}>
+            <Ionicons name="card-outline" size={48} color={colors.neutral[400]} />
+            <Text style={styles.emptyStateText}>No transactions found</Text>
+            <Text style={styles.emptyStateSubtext}>Add some transactions to see your spending overview</Text>
+          </View>
+        </View>
+      );
+    }
 
     return (
       <View style={styles.overviewCard}>
@@ -178,7 +258,7 @@ const AnalyticsScreen = ({ navigation }) => {
           <View style={styles.overviewItem}>
             <Ionicons name="card" size={24} color="#3b82f6" />
             <Text style={styles.overviewValue}>
-              {formatCurrency(analytics.totalSpent)}
+              {formatCurrency(analytics.totalSpent || 0)}
             </Text>
             <Text style={styles.overviewLabel}>Total Spent</Text>
           </View>
@@ -186,7 +266,7 @@ const AnalyticsScreen = ({ navigation }) => {
           <View style={styles.overviewItem}>
             <Ionicons name="calendar" size={24} color="#10b981" />
             <Text style={styles.overviewValue}>
-              {formatCurrency(analytics.dailyAverage)}
+              {formatCurrency(analytics.dailyAverage || 0)}
             </Text>
             <Text style={styles.overviewLabel}>Daily Average</Text>
           </View>
@@ -194,7 +274,7 @@ const AnalyticsScreen = ({ navigation }) => {
           <View style={styles.overviewItem}>
             <Ionicons name="receipt" size={24} color="#f59e0b" />
             <Text style={styles.overviewValue}>
-              {analytics.transactionCount}
+              {analytics.transactionCount || 0}
             </Text>
             <Text style={styles.overviewLabel}>Transactions</Text>
           </View>
@@ -202,14 +282,14 @@ const AnalyticsScreen = ({ navigation }) => {
           <View style={styles.overviewItem}>
             <Ionicons name="stats-chart" size={24} color="#8b5cf6" />
             <Text style={styles.overviewValue}>
-              {formatCurrency(analytics.weeklyAverage)}
+              {formatCurrency(analytics.weeklyAverage || 0)}
             </Text>
             <Text style={styles.overviewLabel}>Weekly Avg</Text>
           </View>
         </View>
       </View>
     );
-  };  if (loading) {
+  };if (loading) {
     return (
       <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
         <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
@@ -240,12 +320,18 @@ const AnalyticsScreen = ({ navigation }) => {
             <Ionicons name="flag-outline" size={20} color="white" />
           </TouchableOpacity>
         </View>
-      </LinearGradient>
-
-      <ScrollView 
+      </LinearGradient>      <ScrollView 
         style={styles.scrollContainer}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[colors.gradients.goals[0]]}
+            tintColor={colors.gradients.goals[0]}
+          />
+        }
       >
         {/* Period Selector */}
         {renderPeriodSelector()}
@@ -501,10 +587,25 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#1e293b',
-  },
-  categoryPercentage: {
+  },  categoryPercentage: {
     fontSize: 12,
     color: '#64748b',
+  },
+  emptyState: {
+    alignItems: 'center',
+    padding: 40,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.neutral[600],
+    marginTop: 12,
+  },
+  emptyStateSubtext: {
+    fontSize: 14,
+    color: colors.neutral[400],
+    marginTop: 4,
+    textAlign: 'center',
   },
 });
 

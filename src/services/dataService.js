@@ -647,8 +647,81 @@ export const fetchBudgetSummary = async () => {
  * @param {Object} transaction - Transaction object to save
  * @returns {Promise<boolean>} Success/failure
  */
+/**
+ * Get current user balance
+ * @returns {Promise<number>} Current balance
+ */
+export const getCurrentBalance = async () => {
+  try {
+    const storedData = await AsyncStorage.getItem('userData');
+    const userData = storedData ? JSON.parse(storedData) : SAMPLE_USER_DATA;
+    return Number(userData.balance) || 0;
+  } catch (error) {
+    console.error('Error getting current balance:', error);
+    return 0;
+  }
+};
+
+/**
+ * Validate if a transaction can be processed
+ * @param {Object} transaction - Transaction object to validate
+ * @returns {Promise<Object>} Validation result { isValid, message }
+ */
+export const validateTransaction = async (transaction) => {
+  try {
+    const currentBalance = await getCurrentBalance();
+    const amount = Number(transaction.amount) || 0;
+    
+    // Check if amount is valid
+    if (amount <= 0) {
+      return {
+        isValid: false,
+        message: 'Transaction amount must be greater than zero.'
+      };
+    }
+    
+    // For income transactions, always allow
+    if (transaction.type === 'income') {
+      return { isValid: true };
+    }
+    
+    // For expense transactions, check balance constraints
+    if (transaction.type === 'expense') {
+      // Check if balance is zero
+      if (currentBalance === 0) {
+        return {
+          isValid: false,
+          message: 'Cannot add expenses when your balance is zero. Please add income first.'
+        };
+      }
+      
+      // Check if transaction would result in negative balance
+      if (amount > currentBalance) {
+        return {
+          isValid: false,
+          message: `Insufficient balance! Your current balance is ₹${currentBalance.toFixed(2)}, but you're trying to spend ₹${amount.toFixed(2)}.`
+        };
+      }
+    }
+    
+    return { isValid: true };
+  } catch (error) {
+    console.error('Error validating transaction:', error);
+    return {
+      isValid: false,
+      message: 'Unable to validate transaction. Please try again.'
+    };
+  }
+};
+
 export const saveTransaction = async (transaction) => {
   try {
+    // Validate transaction before saving
+    const validation = await validateTransaction(transaction);
+    if (!validation.isValid) {
+      throw new Error(validation.message);
+    }
+    
     // Get existing transactions
     const storedTransactions = await AsyncStorage.getItem('transactions');
     const transactions = storedTransactions 
@@ -763,15 +836,31 @@ const updateBalanceFromTransaction = async (transaction) => {
     if (transaction.type === 'income') {
       userData.balance += Number(transaction.amount);
       userData.monthlyIncome += Number(transaction.amount);
-    } else {
-      userData.balance -= Number(transaction.amount);
-      userData.monthlyExpenses += Number(transaction.amount);
+    } else if (transaction.type === 'expense') {
+      // Double-check balance before deducting
+      const currentBalance = Number(userData.balance) || 0;
+      const transactionAmount = Number(transaction.amount) || 0;
+      
+      if (transactionAmount > currentBalance) {
+        throw new Error('Insufficient balance for this transaction');
+      }
+      
+      userData.balance -= transactionAmount;
+      userData.monthlyExpenses += transactionAmount;
+      
+      // Ensure balance doesn't go negative due to floating point errors
+      if (userData.balance < 0) {
+        userData.balance = 0;
+      }
     }
     
     // Save updated user data
     await AsyncStorage.setItem('userData', JSON.stringify(userData));
+    
+    console.log(`Balance updated: ${transaction.type} of ₹${transaction.amount}, New balance: ₹${userData.balance}`);
   } catch (error) {
     console.error('Error updating balance:', error);
+    throw error; // Re-throw to handle in calling function
   }
 };
 
@@ -964,6 +1053,72 @@ export const deleteBudget = async (budgetId) => {
   } catch (error) {
     console.error('Error deleting budget:', error);
     throw error;
+  }
+};
+
+/**
+ * Get spending analytics for a specific period
+ * @param {number} days - Number of days to analyze
+ * @returns {Promise<Object>} Spending analytics object
+ */
+export const getSpendingAnalytics = async (days = 30) => {
+  try {
+    await delay(400);
+    
+    const transactions = await fetchRecentTransactions(days);
+    const expenseTransactions = transactions.filter(t => t.type === 'expense');
+    
+    if (!Array.isArray(expenseTransactions)) {
+      return {
+        totalSpent: 0,
+        dailyAverage: 0,
+        weeklyAverage: 0,
+        transactionCount: 0,
+        topCategories: []
+      };
+    }
+    
+    const totalSpent = expenseTransactions.reduce((sum, t) => sum + (t.amount || 0), 0);
+    const dailyAverage = totalSpent / days;
+    const weeklyAverage = dailyAverage * 7;
+    const transactionCount = expenseTransactions.length;
+    
+    // Category analysis
+    const categorySpending = {};
+    expenseTransactions.forEach(t => {
+      const category = t.category || 'Other';
+      categorySpending[category] = (categorySpending[category] || 0) + (t.amount || 0);
+    });
+    
+    // Calculate percentages and sort categories
+    const topCategories = Object.entries(categorySpending)
+      .map(([category, amount]) => ({
+        category,
+        amount,
+        percentage: totalSpent > 0 ? (amount / totalSpent) * 100 : 0
+      }))
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 5);
+    
+    return {
+      totalSpent,
+      dailyAverage,
+      weeklyAverage,
+      transactionCount,
+      topCategories: Array.isArray(topCategories) ? topCategories : [],
+      period: days,
+      startDate: new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString(),
+      endDate: new Date().toISOString()
+    };
+  } catch (error) {
+    console.error('Error getting spending analytics:', error);
+    return {
+      totalSpent: 0,
+      dailyAverage: 0,
+      weeklyAverage: 0,
+      transactionCount: 0,
+      topCategories: []
+    };
   }
 };
 

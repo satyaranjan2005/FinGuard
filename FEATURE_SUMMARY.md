@@ -11,9 +11,12 @@
 - ✅ Add new transactions with categories, amounts, payment modes
 - ✅ Edit existing transactions 
 - ✅ Delete transactions with confirmation
-- ✅ View transaction history with filtering by category
+- ✅ View transaction history with filtering by category, time period
 - ✅ Real-time balance updates
 - ✅ Transaction details modal
+- ✅ **NEW: Balance validation and negative balance prevention**
+- ✅ **NEW: Real-time balance checking for expense transactions**
+- ✅ **NEW: Zero balance protection with user guidance**
 
 ### 2. **Budget Management (CRUD)**
 - ✅ Create budgets for different categories
@@ -64,7 +67,16 @@
 - ✅ Monthly/weekly spending trends
 - ✅ Goal progress tracking
 
-### 9. **Notifications**
+### 9. **Balance Protection & Validation (NEW)**
+- ✅ **Smart balance validation prevents negative balances**
+- ✅ **Real-time balance checking for all expense transactions**
+- ✅ **Zero balance protection with clear user guidance**
+- ✅ **Live balance preview showing remaining amount after transaction**
+- ✅ **Intelligent expense type blocking when balance is zero**
+- ✅ **Multi-layer validation (UI, form, service) for maximum protection**
+- ✅ **Descriptive error messages with exact amounts and shortfalls**
+
+### 10. **Notifications**
 - ✅ Budget alerts and warnings
 - ✅ Goal achievement notifications
 - ✅ Bill reminders
@@ -78,6 +90,8 @@
 - Added `updateCategory`, `deleteCategory`
 - Added `saveBudget`, `updateBudget`, `deleteBudget`
 - Added `updateGoal`, `deleteGoal`, `addToGoal`
+- **NEW: Added `getCurrentBalance()` and `validateTransaction()`**
+- **NEW: Enhanced transaction processing with balance validation**
 
 ### 2. **Storage Service**
 - Enhanced `storageService.js` with additional methods
@@ -86,8 +100,8 @@
 - Improved error handling and data validation
 
 ### 3. **Screen Enhancements**
-- **AddTransactionScreen**: Added edit mode functionality
-- **TransactionHistory**: Added edit/delete with modal
+- **AddTransactionScreen**: Added edit mode functionality + **NEW: Real-time balance validation**
+- **TransactionHistory**: Added edit/delete with modal + filtering
 - **BudgetScreen**: Added full CRUD with progress tracking
 - **GoalsScreen**: Added full goal management with contributions
 - **CategoriesScreen**: Enhanced with better UX

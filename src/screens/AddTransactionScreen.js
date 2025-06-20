@@ -7,7 +7,7 @@ import * as Haptics from 'expo-haptics';
 import RNPickerSelect from 'react-native-picker-select';
 import { Button, Card, Input } from '../components';
 import { storageService } from '../services/storageService';
-import { fetchCategories, saveTransaction, updateTransaction } from '../services/dataService';
+import { fetchCategories, saveTransaction, updateTransaction, getCurrentBalance, validateTransaction } from '../services/dataService';
 
 const AddTransactionScreen = ({ navigation, route }) => {
   const { transaction: editTransaction } = route?.params || {};
@@ -41,13 +41,26 @@ const AddTransactionScreen = ({ navigation, route }) => {
     setAmount(cleanText);
   };  const [categoryId, setCategoryId] = useState(editTransaction?.categoryId || '');
   const [notes, setNotes] = useState(editTransaction?.notes || '');
-  const [paymentMode, setPaymentMode] = useState(editTransaction?.paymentMode || 'cash');
-  const [date, setDate] = useState(editTransaction?.date?.split('T')[0] || new Date().toISOString().split('T')[0]);
+  const [paymentMode, setPaymentMode] = useState(editTransaction?.paymentMode || 'cash');  const [date, setDate] = useState(editTransaction?.date?.split('T')[0] || new Date().toISOString().split('T')[0]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [currentBalance, setCurrentBalance] = useState(0);
+  
   useEffect(() => {
     loadCategories();
+    loadCurrentBalance();
   }, []);
+
+  // Load current balance
+  const loadCurrentBalance = async () => {
+    try {
+      const balance = await getCurrentBalance();
+      setCurrentBalance(balance);
+    } catch (error) {
+      console.error('Error loading balance:', error);
+      setCurrentBalance(0);
+    }
+  };
 
   // Reset category selection when type changes
   useEffect(() => {
@@ -125,14 +138,28 @@ const AddTransactionScreen = ({ navigation, route }) => {
       Alert.alert('Validation Error', 'Transaction date cannot be in the future');
       return false;
     }
-    
-    if (selectedDate < oneYearAgo) {
+      if (selectedDate < oneYearAgo) {
       Alert.alert('Validation Error', 'Transaction date cannot be more than one year ago');
       return false;
     }
     
-    return true;
-  };const handleSubmit = async () => {
+    // Validate balance for expense transactions (for new transactions only)
+    if (!isEditing && type === 'expense') {
+      if (currentBalance === 0) {
+        Alert.alert('Transaction Blocked', 'Cannot add expenses when your balance is zero. Please add income first.');
+        return false;
+      }
+      
+      if (numAmount > currentBalance) {
+        Alert.alert(
+          'Insufficient Balance', 
+          `You don't have enough balance for this transaction.\n\nAvailable: ₹${currentBalance.toFixed(2)}\nRequired: ₹${numAmount.toFixed(2)}\nShortfall: ₹${(numAmount - currentBalance).toFixed(2)}`
+        );
+        return false;
+      }
+    }
+    
+    return true;};const handleSubmit = async () => {
     if (!validateForm()) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
@@ -154,16 +181,28 @@ const AddTransactionScreen = ({ navigation, route }) => {
         date: date + 'T' + new Date().toTimeString().split(' ')[0], // Add time to date
         createdAt: isEditing ? editTransaction.createdAt : new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-      };      if (isEditing) {
+      };
+
+      // For new expense transactions, validate balance
+      if (!isEditing && type === 'expense') {
+        const validation = await validateTransaction(transactionData);
+        if (!validation.isValid) {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+          Alert.alert('Transaction Blocked', validation.message);
+          return;
+        }
+      }if (isEditing) {
         await updateTransaction(editTransaction.id, transactionData);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         Alert.alert('Success', 'Transaction updated successfully!', [
           { text: 'OK', onPress: () => navigation.goBack() }
-        ]);
-      } else {
+        ]);      } else {
         const savedTransaction = await saveTransaction(transactionData);
         console.log('Transaction saved:', savedTransaction);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        
+        // Refresh balance after successful transaction
+        await loadCurrentBalance();
         
         Alert.alert(
           'Success', 
@@ -205,8 +244,7 @@ const AddTransactionScreen = ({ navigation, route }) => {
     setIsAmountFocused(false);
   };return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-      <LinearGradient
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />      <LinearGradient
         colors={['#4338ca', '#6366f1']}
         style={styles.header}
       >
@@ -217,7 +255,14 @@ const AddTransactionScreen = ({ navigation, route }) => {
           >
             <Ionicons name="arrow-back" size={24} color="white" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>{isEditing ? 'Edit Transaction' : 'Add Transaction'}</Text>
+          <View style={styles.headerTitleContainer}>
+            <Text style={styles.headerTitle}>{isEditing ? 'Edit Transaction' : 'Add Transaction'}</Text>
+            {!isEditing && (
+              <Text style={styles.balanceText}>
+                Current Balance: ₹{currentBalance.toFixed(2)}
+              </Text>
+            )}
+          </View>
           <View style={{width: 24}} /> {/* Empty view for balance */}
         </View>
       </LinearGradient>
@@ -234,6 +279,14 @@ const AddTransactionScreen = ({ navigation, route }) => {
             <View style={styles.toggleContainer}>              <TouchableOpacity
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  if (currentBalance === 0) {
+                    Alert.alert(
+                      'No Balance Available',
+                      'You cannot add expenses when your balance is zero. Please add income first.',
+                      [{ text: 'OK' }]
+                    );
+                    return;
+                  }
                   setType('expense');
                   setCategoryId('');
                 }}
@@ -299,12 +352,36 @@ const AddTransactionScreen = ({ navigation, route }) => {
                 selectTextOnFocus={true}
                 onFocus={() => setIsAmountFocused(true)}
                 onBlur={() => setIsAmountFocused(false)}
-              />
-            </View>
+              />            </View>
             {amount && parseFloat(amount) > 0 && (
               <Text style={styles.amountHelper}>
                 Amount: ₹{parseFloat(amount).toFixed(2)}
               </Text>
+            )}
+            {/* Balance validation helper for expenses */}
+            {type === 'expense' && amount && parseFloat(amount) > 0 && (
+              (() => {
+                const enteredAmount = parseFloat(amount);
+                if (currentBalance === 0) {
+                  return (
+                    <Text style={styles.balanceWarning}>
+                      ⚠️ Cannot add expenses when balance is zero
+                    </Text>
+                  );
+                } else if (enteredAmount > currentBalance) {
+                  return (
+                    <Text style={styles.balanceError}>
+                      ❌ Insufficient balance! (Available: ₹{currentBalance.toFixed(2)})
+                    </Text>
+                  );
+                } else {
+                  return (
+                    <Text style={styles.balanceOk}>
+                      ✅ Remaining balance: ₹{(currentBalance - enteredAmount).toFixed(2)}
+                    </Text>
+                  );
+                }
+              })()
             )}
           </Card>
 
@@ -449,13 +526,23 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 12,
     backgroundColor: 'rgba(255, 255, 255, 0.15)',
-  },
-  headerTitle: {
+  },  headerTitle: {
     color: 'white',
     fontSize: 20,
     fontWeight: 'bold',
     textAlign: 'center',
-  },  scrollView: {
+  },
+  headerTitleContainer: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  balanceText: {
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontSize: 14,
+    fontWeight: '500',
+    marginTop: 4,
+    textAlign: 'center',
+  },scrollView: {
     flex: 1,
   },
   scrollContent: {
@@ -543,12 +630,32 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     paddingVertical: 12,
     paddingRight: 16,
-  },
-  amountHelper: {
+  },  amountHelper: {
     fontSize: 14,
     color: '#6b7280',
     marginTop: 8,
     fontWeight: '500',
+  },
+  balanceWarning: {
+    fontSize: 14,
+    color: '#f59e0b',
+    marginTop: 8,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  balanceError: {
+    fontSize: 14,
+    color: '#ef4444',
+    marginTop: 8,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  balanceOk: {
+    fontSize: 14,
+    color: '#10b981',
+    marginTop: 8,
+    fontWeight: '600',
+    textAlign: 'center',
   },
   categoryPreview: {
     flexDirection: 'row',
