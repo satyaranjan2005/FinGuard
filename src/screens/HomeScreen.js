@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Button, Card, Input } from '../components';
 
-const HomeScreen = () => {
+const HomeScreen = ({ navigation }) => {
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
 

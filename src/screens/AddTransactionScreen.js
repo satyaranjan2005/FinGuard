@@ -7,11 +7,14 @@ import * as Haptics from 'expo-haptics';
 import RNPickerSelect from 'react-native-picker-select';
 import { Button, Card, Input } from '../components';
 import { storageService } from '../services/storageService';
-import { fetchCategories } from '../services/dataService';
+import { fetchCategories, saveTransaction, updateTransaction } from '../services/dataService';
 
-const AddTransactionScreen = ({ navigation }) => {
-  const [type, setType] = useState('expense');
-  const [amount, setAmount] = useState('');
+const AddTransactionScreen = ({ navigation, route }) => {
+  const { transaction: editTransaction } = route?.params || {};
+  const isEditing = !!editTransaction;
+  
+  const [type, setType] = useState(editTransaction?.type || 'expense');
+  const [amount, setAmount] = useState(editTransaction?.amount?.toString() || '');
   const [isAmountFocused, setIsAmountFocused] = useState(false);
   
   // Format and validate amount input
@@ -36,20 +39,39 @@ const AddTransactionScreen = ({ navigation }) => {
     }
     
     setAmount(cleanText);
-  };
-  const [categoryId, setCategoryId] = useState('');
-  const [notes, setNotes] = useState('');
-  const [paymentMode, setPaymentMode] = useState('cash');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  };  const [categoryId, setCategoryId] = useState(editTransaction?.categoryId || '');
+  const [notes, setNotes] = useState(editTransaction?.notes || '');
+  const [paymentMode, setPaymentMode] = useState(editTransaction?.paymentMode || 'cash');
+  const [date, setDate] = useState(editTransaction?.date?.split('T')[0] || new Date().toISOString().split('T')[0]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
-
   useEffect(() => {
     loadCategories();
   }, []);
+
+  // Reset category selection when type changes
+  useEffect(() => {
+    if (!isEditing) {
+      setCategoryId('');
+    }
+  }, [type, isEditing]);
   const loadCategories = async () => {
-    const categoriesData = await fetchCategories();
-    setCategories(categoriesData);
+    setLoading(true);
+    try {
+      const categoriesData = await fetchCategories();
+      setCategories(Array.isArray(categoriesData) ? categoriesData : []);
+      
+      // If editing and no category is selected, set from edit transaction
+      if (isEditing && editTransaction?.categoryId && !categoryId) {
+        setCategoryId(editTransaction.categoryId);
+      }
+    } catch (error) {
+      console.error('Load categories error:', error);
+      Alert.alert('Error', 'Failed to load categories. Please check your connection and try again.');
+      setCategories([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const filteredCategories = categories.filter(cat => cat.type === type);
@@ -60,60 +82,128 @@ const AddTransactionScreen = ({ navigation }) => {
     { label: 'Credit Card', value: 'credit_card', icon: 'card-outline' },
     { label: 'Debit Card', value: 'debit_card', icon: 'card-outline' },
     { label: 'Bank Transfer', value: 'bank_transfer', icon: 'swap-horizontal-outline' },
-  ];
-  const validateForm = () => {
-    const numAmount = parseFloat(amount.replace(/[^\d.]/g, ''));
-    if (!amount || isNaN(numAmount) || numAmount <= 0) {
-      Alert.alert('Error', 'Please enter a valid amount greater than 0');
+  ];  const validateForm = () => {
+    // Validate amount
+    const cleanAmount = amount.replace(/[^\d.]/g, '');
+    const numAmount = parseFloat(cleanAmount);
+    
+    if (!amount.trim() || isNaN(numAmount) || numAmount <= 0) {
+      Alert.alert('Validation Error', 'Please enter a valid amount greater than 0');
       return false;
     }
+    
     if (numAmount > 999999.99) {
-      Alert.alert('Error', 'Amount cannot exceed ₹9,99,999.99');
+      Alert.alert('Validation Error', 'Amount cannot exceed ₹9,99,999.99');
       return false;
     }
+    
+    // Validate category selection
     if (!categoryId) {
-      Alert.alert('Error', 'Please select a category');
+      Alert.alert('Validation Error', 'Please select a category');
       return false;
     }
+    
+    // Validate category exists in current type
+    const selectedCategory = categories.find(cat => cat.id === categoryId && cat.type === type);
+    if (!selectedCategory) {
+      Alert.alert('Validation Error', 'Selected category is not valid for this transaction type');
+      return false;
+    }
+    
+    // Validate date
+    if (!date) {
+      Alert.alert('Validation Error', 'Please select a transaction date');
+      return false;
+    }
+    
+    const selectedDate = new Date(date);
+    const today = new Date();
+    const oneYearAgo = new Date();
+    oneYearAgo.setFullYear(today.getFullYear() - 1);
+    
+    if (selectedDate > today) {
+      Alert.alert('Validation Error', 'Transaction date cannot be in the future');
+      return false;
+    }
+    
+    if (selectedDate < oneYearAgo) {
+      Alert.alert('Validation Error', 'Transaction date cannot be more than one year ago');
+      return false;
+    }
+    
     return true;
-  };
-  const handleSubmit = async () => {
+  };const handleSubmit = async () => {
     if (!validateForm()) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
     }
 
     setLoading(true);
-    try {      const transaction = {
-        type,
+    try {
+      // Find the selected category to get its name
+      const selectedCategory = categories.find(cat => cat.id === categoryId);
+      
+      const transactionData = {
+        description: notes || `${type === 'income' ? 'Income' : 'Expense'} - ${selectedCategory?.name || 'Unknown'}`,
         amount: parseFloat(amount.replace(/[^\d.]/g, '')) || 0,
+        type,
+        category: selectedCategory?.name?.toLowerCase() || 'other',
         categoryId,
         notes,
         paymentMode,
-        date,
-        createdAt: new Date().toISOString(),
-      };
-
-      await storageService.saveTransaction(transaction);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert('Success', 'Transaction added successfully!', [
-        { text: 'OK', onPress: () => navigation.navigate('Dashboard') }
-      ]);
+        date: date + 'T' + new Date().toTimeString().split(' ')[0], // Add time to date
+        createdAt: isEditing ? editTransaction.createdAt : new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };      if (isEditing) {
+        await updateTransaction(editTransaction.id, transactionData);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        Alert.alert('Success', 'Transaction updated successfully!', [
+          { text: 'OK', onPress: () => navigation.goBack() }
+        ]);
+      } else {
+        const savedTransaction = await saveTransaction(transactionData);
+        console.log('Transaction saved:', savedTransaction);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        
+        Alert.alert(
+          'Success', 
+          `Transaction of ₹${transactionData.amount} added successfully!`, 
+          [
+            { 
+              text: 'Add Another', 
+              onPress: () => {
+                resetForm();
+              }
+            },
+            { 
+              text: 'View All', 
+              onPress: () => navigation.navigate('TransactionHistory') 
+            },
+            { 
+              text: 'Done', 
+              style: 'cancel',
+              onPress: () => navigation.navigate('Dashboard') 
+            }
+          ]
+        );
+      }
     } catch (error) {
+      console.error('Save transaction error:', error);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Error', 'Failed to add transaction');
+      Alert.alert('Error', error.message || 'Failed to save transaction');
     } finally {
       setLoading(false);
     }
   };
-
   const resetForm = () => {
+    setType('expense');
     setAmount('');
     setCategoryId('');
     setNotes('');
     setPaymentMode('cash');
     setDate(new Date().toISOString().split('T')[0]);
-  };  return (
+    setIsAmountFocused(false);
+  };return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       <LinearGradient
@@ -127,7 +217,7 @@ const AddTransactionScreen = ({ navigation }) => {
           >
             <Ionicons name="arrow-back" size={24} color="white" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Add Transaction</Text>
+          <Text style={styles.headerTitle}>{isEditing ? 'Edit Transaction' : 'Add Transaction'}</Text>
           <View style={{width: 24}} /> {/* Empty view for balance */}
         </View>
       </LinearGradient>

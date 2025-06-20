@@ -1,43 +1,78 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Alert, StyleSheet, Dimensions, ActivityIndicator, StatusBar } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Alert, StyleSheet, Dimensions, ActivityIndicator, StatusBar, Modal, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ProgressChart } from 'react-native-chart-kit';
+import { useFocusEffect } from '@react-navigation/native';
 import { Button, Card, Input } from '../components';
 import { storageService } from '../services/storageService';
+import { fetchCategories, saveBudget, fetchBudgets, deleteBudget as deleteBudgetFromService, updateBudget, initializeAppData } from '../services/dataService';
 import colors from '../utils/colors';
 
-const BudgetScreen = () => {
+const BudgetScreen = ({ navigation }) => {
   const [budgets, setBudgets] = useState([]);
   const [categories, setCategories] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [showAddBudget, setShowAddBudget] = useState(false);
+  const [editingBudget, setEditingBudget] = useState(null);
   const [newBudgetCategory, setNewBudgetCategory] = useState('');
-  const [newBudgetAmount, setNewBudgetAmount] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [newBudgetAmount, setNewBudgetAmount] = useState('');  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
 
+  // Fallback categories in case data loading fails
+  const fallbackCategories = [
+    { id: 'cat1', name: 'Food', type: 'expense', color: '#10b981', icon: 'restaurant' },
+    { id: 'cat2', name: 'Transportation', type: 'expense', color: '#8b5cf6', icon: 'car' },
+    { id: 'cat3', name: 'Shopping', type: 'expense', color: '#84cc16', icon: 'bag' },
+    { id: 'cat4', name: 'Entertainment', type: 'expense', color: '#ef4444', icon: 'film' },
+    { id: 'cat5', name: 'Healthcare', type: 'expense', color: '#06b6d4', icon: 'medical' },
+    { id: 'cat6', name: 'Utilities', type: 'expense', color: '#f59e0b', icon: 'flash' },
+    { id: 'cat7', name: 'Housing', type: 'expense', color: '#3b82f6', icon: 'home' }
+  ];
   useEffect(() => {
     loadData();
   }, []);
-  
-  const loadData = async () => {
+
+  useFocusEffect(
+    React.useCallback(() => {
+      loadData();
+    }, [])  );  const loadData = async () => {
     setLoading(true);
     try {
-      const [budgetsData, categoriesData, transactionsData] = await Promise.all([
-        storageService.getBudgets(),
-        storageService.getCategories(),
-        storageService.getTransactions(),
-      ]);
+      // Initialize app data if needed (ensures sample categories exist)
+      await initializeAppData();
       
-      setBudgets(budgetsData);
-      setCategories(categoriesData);
-      setTransactions(transactionsData);
+      const [budgetsData, categoriesData, transactionsData] = await Promise.all([
+        fetchBudgets(),
+        fetchCategories(), // Load all categories, then filter in getExpenseCategories
+        storageService.getTransactions(),      ]);
+      
+      setBudgets(Array.isArray(budgetsData) ? budgetsData : []);
+      
+      // Use fallback categories if none loaded
+      const finalCategories = Array.isArray(categoriesData) && categoriesData.length > 0 
+        ? categoriesData 
+        : fallbackCategories;
+      setCategories(finalCategories);
+      
+      setTransactions(Array.isArray(transactionsData) ? transactionsData : []);
     } catch (error) {
+      console.error('Load budget data error:', error);
       Alert.alert('Error', 'Failed to load budget data');
-    } finally {
+      setBudgets([]);
+      setCategories(fallbackCategories); // Use fallback on error
+      setTransactions([]);
+    }finally {
       setLoading(false);
     }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
   };
 
   const getCurrentMonthSpending = (categoryId) => {
@@ -64,45 +99,68 @@ const BudgetScreen = () => {
       remaining: Math.max(budget.amount - spent, 0),
       isOverBudget: spent > budget.amount
     };
-  };
-
-  const addBudget = async () => {
+  };  const addBudget = async () => {
     if (!newBudgetCategory || !newBudgetAmount || parseFloat(newBudgetAmount) <= 0) {
-      Alert.alert('Error', 'Please select a category and enter a valid amount');
+      Alert.alert('Validation Error', 'Please select a category and enter a valid amount greater than 0');
       return;
     }
 
-    // Check if budget already exists for this category this month
-    const currentMonth = new Date().getMonth();
-    const currentYear = new Date().getFullYear();
-    const existingBudget = budgets.find(budget => 
-      budget.categoryId === newBudgetCategory &&
-      budget.month === currentMonth &&
-      budget.year === currentYear
-    );
-
-    if (existingBudget) {
-      Alert.alert('Error', 'Budget already exists for this category this month');
+    const budgetAmount = parseFloat(newBudgetAmount);
+    if (budgetAmount > 1000000) {
+      Alert.alert('Validation Error', 'Budget amount cannot exceed ₹10,00,000');
       return;
+    }
+
+    // Check if budget already exists for this category this month (only for new budgets)
+    if (!editingBudget) {
+      const currentMonth = new Date().getMonth();
+      const currentYear = new Date().getFullYear();
+      const existingBudget = budgets.find(budget => 
+        budget.categoryId === newBudgetCategory &&
+        budget.month === currentMonth &&
+        budget.year === currentYear
+      );
+
+      if (existingBudget) {
+        Alert.alert('Budget Exists', 'A budget already exists for this category this month. You can edit the existing budget instead.');
+        return;
+      }
     }
 
     try {
-      await storageService.saveBudget({
-        categoryId: newBudgetCategory,
-        amount: parseFloat(newBudgetAmount),
-      });
+      if (editingBudget) {
+        // Update existing budget
+        await updateBudget(editingBudget.id, {
+          categoryId: newBudgetCategory,
+          amount: budgetAmount,
+          updatedAt: new Date().toISOString()
+        });
+        Alert.alert('Success', 'Budget updated successfully!');
+      } else {
+        // Create new budget
+        await saveBudget({
+          categoryId: newBudgetCategory,
+          amount: budgetAmount,
+        });
+        Alert.alert('Success', 'Budget created successfully!');
+      }
       
-      setNewBudgetCategory('');
-      setNewBudgetAmount('');
-      setShowAddBudget(false);
+      resetForm();
       loadData();
-      Alert.alert('Success', 'Budget created successfully!');
     } catch (error) {
-      Alert.alert('Error', 'Failed to create budget');
+      console.error('Save budget error:', error);
+      Alert.alert('Error', error.message || (editingBudget ? 'Failed to update budget' : 'Failed to create budget'));
     }
   };
 
-  const deleteBudget = (budgetId) => {
+  const handleEditBudget = (budget) => {
+    setEditingBudget(budget);
+    setNewBudgetCategory(budget.categoryId);
+    setNewBudgetAmount(budget.amount.toString());
+    setShowAddBudget(true);
+  };
+
+  const handleDeleteBudget = (budgetId) => {
     Alert.alert(
       'Delete Budget',
       'Are you sure you want to delete this budget?',
@@ -112,16 +170,25 @@ const BudgetScreen = () => {
           text: 'Delete', 
           style: 'destructive',
           onPress: async () => {
-            // Note: You'll need to implement deleteBudget in storageService
-            // For now, we'll just reload data
-            loadData();
+            try {
+              await deleteBudgetFromService(budgetId);
+              Alert.alert('Success', 'Budget deleted successfully');
+              loadData();
+            } catch (error) {
+              Alert.alert('Error', 'Failed to delete budget');
+            }
           }
         }
       ]
     );
   };
 
-  const getExpenseCategories = () => {
+  const resetForm = () => {
+    setNewBudgetCategory('');
+    setNewBudgetAmount('');
+    setEditingBudget(null);
+    setShowAddBudget(false);
+  };  const getExpenseCategories = () => {
     return categories.filter(cat => cat.type === 'expense');
   };
 
@@ -157,16 +224,20 @@ const BudgetScreen = () => {
           <View style={styles.headerLeft}>
             <Ionicons name="wallet" size={26} color="white" style={styles.headerIcon} />
             <Text style={styles.headerTitle}>Budget Management</Text>
-          </View>
-          <View style={styles.headerRight}>
-            <TouchableOpacity style={styles.headerButton}>
+          </View>          <View style={styles.headerRight}>
+            <TouchableOpacity 
+              style={styles.headerButton}
+              onPress={() => navigation.navigate('Notifications')}
+            >
               <Ionicons name="notifications-outline" size={20} color="white" />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.headerButton}>
+            <TouchableOpacity 
+              style={styles.headerButton}
+              onPress={() => navigation.navigate('Categories')}
+            >
               <Ionicons name="settings-outline" size={20} color="white" />
             </TouchableOpacity>
-          </View>
-        </View>
+          </View>        </View>
         <Text style={styles.headerSubtitle}>{currentMonth}</Text>
       </LinearGradient>
 
@@ -175,11 +246,18 @@ const BudgetScreen = () => {
           <ActivityIndicator size="large" color={colors.primary.main} />
           <Text style={styles.loadingText}>Loading budget data...</Text>
         </View>
-      ) : (
-        <ScrollView 
+      ) : (        <ScrollView 
           style={styles.scrollView} 
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              colors={[colors.primary.main]}
+              tintColor={colors.primary.main}
+            />
+          }
         >
           <View style={styles.content}>
           </View>
@@ -254,22 +332,55 @@ const BudgetScreen = () => {
                 <View style={styles.formIconContainer}>
                   <Ionicons name="create" size={24} color="white" />
                 </View>
-                <Text style={styles.formTitle}>Create New Budget</Text>
+                <Text style={styles.formTitle}>
+                  {editingBudget ? 'Edit Budget' : 'Create New Budget'}
+                </Text>
               </View>
             
-              <Text style={styles.inputLabel}>Category</Text>
-              <TouchableOpacity 
+              <Text style={styles.inputLabel}>Category</Text>              <TouchableOpacity 
                 style={styles.categorySelector}
                 onPress={() => {
-                  Alert.alert('Select Category', 'Category picker would be here');
-                }}
-              >
-                <Text style={styles.categorySelectorText}>
-                  {newBudgetCategory ? 
-                    categories.find(c => c.id === newBudgetCategory)?.name : 
-                    'Select a category...'
+                  if (getExpenseCategories().length === 0) {
+                    Alert.alert(
+                      'No Categories',
+                      'Please create some expense categories first to set up budgets.',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        { 
+                          text: 'Manage Categories', 
+                          onPress: () => navigation.navigate('Categories')
+                        }
+                      ]
+                    );
+                  } else {
+                    setShowCategoryModal(true);
                   }
-                </Text>
+                }}
+                activeOpacity={0.7}
+              >
+                {newBudgetCategory ? (
+                  <View style={styles.selectedCategoryContent}>
+                    <View 
+                      style={[
+                        styles.selectedCategoryIcon,
+                        { backgroundColor: categories.find(c => c.id === newBudgetCategory)?.color + '20' }
+                      ]}
+                    >
+                      <Ionicons 
+                        name={categories.find(c => c.id === newBudgetCategory)?.icon} 
+                        size={18} 
+                        color={categories.find(c => c.id === newBudgetCategory)?.color} 
+                      />
+                    </View>
+                    <Text style={styles.selectedCategoryText}>
+                      {categories.find(c => c.id === newBudgetCategory)?.name}
+                    </Text>
+                  </View>
+                ) : (
+                  <Text style={styles.categorySelectorPlaceholder}>
+                    Select a category...
+                  </Text>
+                )}
                 <Ionicons name="chevron-down" size={20} color="#6b7280" />
               </TouchableOpacity>
             
@@ -294,17 +405,14 @@ const BudgetScreen = () => {
                     style={styles.saveButtonGradient}
                   >
                     <Ionicons name="checkmark-circle" size={20} color="white" style={styles.saveButtonIcon} />
-                    <Text style={styles.saveButtonText}>Create Budget</Text>
+                    <Text style={styles.saveButtonText}>
+                      {editingBudget ? 'Update Budget' : 'Create Budget'}
+                    </Text>
                   </LinearGradient>
-                </TouchableOpacity>
-                <TouchableOpacity 
+                </TouchableOpacity>                <TouchableOpacity 
                   style={styles.cancelButton}
                   activeOpacity={0.7}
-                  onPress={() => {
-                    setShowAddBudget(false);
-                    setNewBudgetCategory('');
-                    setNewBudgetAmount('');
-                  }}
+                  onPress={resetForm}
                 >
                   <Text style={styles.cancelButtonText}>Cancel</Text>
                 </TouchableOpacity>
@@ -374,15 +482,23 @@ const BudgetScreen = () => {
                         <Text style={styles.budgetAmount}>
                           ₹{progress.spent.toFixed(2)} of ₹{budget.amount.toFixed(2)}
                         </Text>
-                      </View>
+                      </View>                    </View>
+                    <View style={styles.budgetActions}>
+                      <TouchableOpacity 
+                        style={styles.editButton} 
+                        onPress={() => handleEditBudget(budget)}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="create-outline" size={18} color={colors.primary} />
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        style={styles.deleteButton} 
+                        onPress={() => handleDeleteBudget(budget.id)}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="trash-outline" size={18} color={colors.error} />
+                      </TouchableOpacity>
                     </View>
-                    <TouchableOpacity 
-                      style={styles.deleteButton} 
-                      onPress={() => deleteBudget(budget.id)}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons name="trash-outline" size={18} color={colors.danger.main} />
-                    </TouchableOpacity>
                   </View>
                 
                   {/* Progress Bar */}
@@ -450,9 +566,78 @@ const BudgetScreen = () => {
               );
             }) : null
           )}
-          <View style={styles.bottomSpacer} />
-        </ScrollView>
+          <View style={styles.bottomSpacer} />        </ScrollView>
       )}
+
+      {/* Category Selection Modal */}
+      <Modal
+        visible={showCategoryModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowCategoryModal(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Category</Text>
+              <TouchableOpacity
+                style={styles.modalCloseButton}
+                onPress={() => setShowCategoryModal(false)}
+              >
+                <Ionicons name="close" size={24} color={colors.text.secondary} />
+              </TouchableOpacity>
+            </View>            <ScrollView style={styles.modalList} showsVerticalScrollIndicator={false}>
+              {getExpenseCategories().map((category) => (
+                <TouchableOpacity
+                  key={category.id}
+                  style={[
+                    styles.modalCategoryItem,
+                    newBudgetCategory === category.id && styles.modalCategoryItemSelected
+                  ]}
+                  onPress={() => {
+                    setNewBudgetCategory(category.id);
+                    setShowCategoryModal(false);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.modalCategoryInfo}>
+                    <View 
+                      style={[
+                        styles.modalCategoryIcon,
+                        { backgroundColor: category.color + '20' }
+                      ]}
+                    >
+                      <Ionicons name={category.icon} size={20} color={category.color} />
+                    </View>
+                    <Text style={styles.modalCategoryName}>{category.name}</Text>
+                  </View>
+                  {newBudgetCategory === category.id && (
+                    <Ionicons name="checkmark-circle" size={20} color={colors.success.main} />
+                  )}
+                </TouchableOpacity>
+              ))}
+
+              {getExpenseCategories().length === 0 && (
+                <View style={styles.modalEmptyState}>
+                  <Ionicons name="folder-outline" size={48} color={colors.text.secondary} />
+                  <Text style={styles.modalEmptyTitle}>No expense categories</Text>                  <Text style={styles.modalEmptySubtitle}>
+                    Create expense categories first to set up budgets.
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.modalEmptyButton}
+                    onPress={() => {
+                      setShowCategoryModal(false);
+                      navigation.navigate('Categories');
+                    }}
+                  >
+                    <Text style={styles.modalEmptyButtonText}>Manage Categories</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -720,8 +905,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginBottom: 6,
     fontSize: 15,
-  },
-  categorySelector: {
+  },  categorySelector: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -731,10 +915,31 @@ const styles = StyleSheet.create({
     padding: 14,
     marginBottom: 14,
     backgroundColor: '#f9fafb',
+    minHeight: 56,
   },
-  categorySelectorText: {
+  selectedCategoryContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  selectedCategoryIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  selectedCategoryText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: colors.text.primary,
+    flex: 1,
+  },
+  categorySelectorPlaceholder: {
+    fontSize: 16,
     color: '#6b7280',
-    fontSize: 15,
+    flex: 1,
   },
   budgetInput: {
     marginBottom: 14,
@@ -1010,11 +1215,113 @@ const styles = StyleSheet.create({
   bottomSpacer: {
     height: 36,
   },
-  deleteButton: {
+  budgetActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  editButton: {
+    padding: 8,
+    borderRadius: 10,
+    backgroundColor: '#eff6ff',
+  },  deleteButton: {
     padding: 8,
     borderRadius: 10,
     backgroundColor: '#fef2f2',
-  }
+  },
+  // Modal styles
+  modalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },  modalContent: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '85%',
+    minHeight: '60%',
+    paddingBottom: 20,
+  },  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.text.primary,
+  },
+  modalCloseButton: {
+    padding: 4,
+  },  modalList: {
+    flex: 1,
+    paddingHorizontal: 24,
+    paddingTop: 16,
+  },  modalCategoryItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 18,
+    paddingHorizontal: 16,
+    marginVertical: 3,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0, 0, 0, 0.02)',
+    minHeight: 64,
+  },
+  modalCategoryItemSelected: {
+    backgroundColor: colors.success.main + '10',
+    borderWidth: 1,
+    borderColor: colors.success.main + '30',
+  },
+  modalCategoryInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  modalCategoryIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  modalCategoryName: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: colors.text.primary,
+  },
+  modalEmptyState: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+  },
+  modalEmptyTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.text.primary,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  modalEmptySubtitle: {
+    fontSize: 14,
+    color: colors.text.secondary,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  modalEmptyButton: {
+    backgroundColor: colors.primary.main,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+  },
+  modalEmptyButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+  },
 });
 
 export default BudgetScreen;

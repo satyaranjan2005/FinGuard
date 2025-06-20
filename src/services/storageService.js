@@ -80,14 +80,17 @@ export const storageService = {
     const transactions = await this.getTransactions();
     const index = transactions.findIndex(t => t.id === id);
     if (index !== -1) {
-      transactions[index] = { ...transactions[index], ...updates };
+      transactions[index] = { ...transactions[index], ...updates, updatedAt: new Date().toISOString() };
       await this.setItem(STORAGE_KEYS.TRANSACTIONS, transactions);
+      return transactions[index];
     }
+    throw new Error('Transaction not found');
   },
 
   async deleteTransaction(id) {
     const transactions = await this.getTransactions();
-    const filtered = transactions.filter(t => t.id !== id);    await this.setItem(STORAGE_KEYS.TRANSACTIONS, filtered);
+    const filtered = transactions.filter(t => t.id !== id);
+    await this.setItem(STORAGE_KEYS.TRANSACTIONS, filtered);
   },
 
   // Category methods
@@ -169,6 +172,58 @@ export const storageService = {
     const budgets = await this.getBudgets();
     const filtered = budgets.filter(b => b.id !== id);
     await this.setItem(STORAGE_KEYS.BUDGETS, filtered);
+  },
+
+  // Goal methods
+  async getGoals() {
+    return (await this.getItem('@finguard_goals')) || [];
+  },
+
+  async saveGoal(goal) {
+    const goals = await this.getGoals();
+    const newGoal = {
+      id: Date.now().toString(),
+      createdAt: new Date().toISOString(),
+      ...goal,
+    };
+    goals.push(newGoal);
+    await this.setItem('@finguard_goals', goals);
+    return newGoal;
+  },
+
+  async updateGoal(id, updates) {
+    const goals = await this.getGoals();
+    const index = goals.findIndex(g => g.id === id);
+    if (index !== -1) {
+      goals[index] = { ...goals[index], ...updates, updatedAt: new Date().toISOString() };
+      await this.setItem('@finguard_goals', goals);
+      return goals[index];
+    }
+    throw new Error('Goal not found');
+  },
+
+  async deleteGoal(id) {
+    const goals = await this.getGoals();
+    const filtered = goals.filter(g => g.id !== id);
+    await this.setItem('@finguard_goals', filtered);
+  },
+
+  // User profile methods
+  async getUserProfile() {
+    return (await this.getItem(STORAGE_KEYS.USER_PROFILE)) || {
+      name: 'User',
+      email: '',
+      currency: '₹',
+      monthlyIncome: 0,
+      savingsGoal: 0,
+    };
+  },
+
+  async updateUserProfile(updates) {
+    const profile = await this.getUserProfile();
+    const updatedProfile = { ...profile, ...updates };
+    await this.setItem(STORAGE_KEYS.USER_PROFILE, updatedProfile);
+    return updatedProfile;
   },
 };
 

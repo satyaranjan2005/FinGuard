@@ -25,80 +25,38 @@ const TabNavigator = () => {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
-        headerShown: true,
-          headerStyle: {
-            backgroundColor: '#4f46e5',
-            elevation: 0,
-            shadowOpacity: 0,
-            borderBottomWidth: 0,
-          },
-          headerTintColor: 'white',
-          headerTitleStyle: {
-            fontWeight: '600',
-            fontSize: 18,
-          },
-          headerTitleAlign: 'center',
+        headerShown: false,
         tabBarIcon: ({ focused, color, size }) => {
-          if (!route || typeof route !== 'object') return null;
-          if (!route.name || typeof route.name !== 'string') return null;
-          
           let iconName = 'circle';
           
-          try {
-            switch (route.name) {
-              case 'Dashboard':
-                iconName = focused ? 'analytics' : 'analytics-outline';
-                break;
-              case 'Transactions':
-                iconName = focused ? 'list' : 'list-outline';
-                break;
-              case 'Add':
-                iconName = focused ? 'add-circle' : 'add-circle-outline';
-                size = 32;
-                break;
-              case 'Budget':
-                iconName = focused ? 'flag' : 'flag-outline';
-                break;
-              case 'Categories':
-                iconName = focused ? 'grid' : 'grid-outline';
-                break;
-            }
-
-            if (!iconName) iconName = 'circle';
-
-            try {
-              if (route.name === 'Add') {
-                return (
-                  <View style={styles.addIconContainer}>
-                    <LinearGradient
-                      colors={['#4338ca', '#6366f1']}
-                      style={styles.addIconGradient}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                    >
-                      <Ionicons name={iconName} size={size || 32} color="white" />
-                    </LinearGradient>
-                  </View>
-                );
-              }
-
+          switch (route.name) {
+            case 'Dashboard':
+              iconName = focused ? 'analytics' : 'analytics-outline';
+              break;
+            case 'Transactions':
+              iconName = focused ? 'list' : 'list-outline';
+              break;
+            case 'Add':
+              iconName = 'add';
               return (
-                <View style={focused ? styles.focusedIconContainer : styles.iconContainer}>
-                  <Ionicons name={iconName} size={size || 24} color={color || '#94a3b8'} />
+                <View style={styles.addIconContainer}>
+                  <LinearGradient
+                    colors={['#4338ca', '#6366f1']}
+                    style={styles.addIconGradient}
+                  >
+                    <Ionicons name={iconName} size={28} color="white" />
+                  </LinearGradient>
                 </View>
               );
-            } catch (err) {
-              console.error('Error rendering tab icon:', err);
-              return (
-                <View style={styles.iconContainer}>
-                  <Ionicons name="alert-circle" size={24} color="#ef4444" />
-                </View>
-              );
-            }
-          } catch (error) {
-            console.warn('Error rendering tab icon:', error);
-            return null;
+            case 'Budget':
+              iconName = focused ? 'wallet' : 'wallet-outline';
+              break;
+            case 'Categories':
+              iconName = focused ? 'grid' : 'grid-outline';
+              break;
           }
+
+          return <Ionicons name={iconName} size={size} color={color} />;
         },
         tabBarActiveTintColor: '#4f46e5',
         tabBarInactiveTintColor: '#94a3b8',        tabBarStyle: {
@@ -108,9 +66,8 @@ const TabNavigator = () => {
           shadowColor: '#000',
           shadowOffset: { width: 0, height: -4 },
           shadowOpacity: 0.1,
-          shadowRadius: 8,
-          height: 65 + insets.bottom,
-          paddingBottom: insets.bottom + 10,
+          shadowRadius: 8,          height: 65 + Math.max(insets.bottom, 20),
+          paddingBottom: Math.max(insets.bottom, 10) + 10,
           paddingTop: 10,
           position: 'absolute',
           borderTopLeftRadius: 20,

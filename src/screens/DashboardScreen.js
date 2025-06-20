@@ -92,13 +92,9 @@ return (
         <View style={styles.headerLeft}>
           <Ionicons name="analytics" size={26} color="white" style={styles.headerIcon} />
           <Text style={styles.headerTitle}>Dashboard</Text>
-        </View>
-        <View style={styles.headerRight}>
+        </View>        <View style={styles.headerRight}>
           <TouchableOpacity style={styles.headerButton} onPress={() => navigation.navigate('Notifications')}>
             <Ionicons name="notifications-outline" size={20} color="white" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.headerButton} onPress={() => navigation.navigate('Profile')}>
-            <Ionicons name="person-circle-outline" size={20} color="white" />
           </TouchableOpacity>
         </View>
       </View>

@@ -211,7 +211,7 @@ const AnalyticsScreen = ({ navigation }) => {
     );
   };  if (loading) {
     return (
-      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
         <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#3b82f6" />
@@ -219,9 +219,8 @@ const AnalyticsScreen = ({ navigation }) => {
         </View>
       </SafeAreaView>
     );
-  }
-  return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+  }  return (
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       {/* Header */}
       <LinearGradient
@@ -234,9 +233,11 @@ const AnalyticsScreen = ({ navigation }) => {
               <Ionicons name="arrow-back" size={24} color="white" />
             </TouchableOpacity>
             <Text style={styles.headerTitle}>Analytics</Text>
-          </View>
-          <TouchableOpacity style={styles.exportButton}>
-            <Ionicons name="download-outline" size={20} color="white" />
+          </View>          <TouchableOpacity 
+            style={styles.exportButton}
+            onPress={() => navigation.navigate('Goals')}
+          >
+            <Ionicons name="flag-outline" size={20} color="white" />
           </TouchableOpacity>
         </View>
       </LinearGradient>

@@ -57,8 +57,7 @@ export const colors = {
     secondary: '#6b7280',
     tertiary: '#9ca3af',
   },
-  
-  // Gradient Combinations
+    // Gradient Combinations
   gradients: {
     budget: ['#4f46e5', '#7c3aed'],
     categories: ['#06b6d4', '#0891b2'],
@@ -67,6 +66,7 @@ export const colors = {
     income: ['#059669', '#047857'],
     expense: ['#dc2626', '#b91c1c'],
     balance: ['#1d4ed8', '#1e40af'],
+    goals: ['#8b5cf6', '#6366f1'],
   }
 };
 

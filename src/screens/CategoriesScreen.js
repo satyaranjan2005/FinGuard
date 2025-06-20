@@ -1,14 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Alert, StyleSheet, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, Alert, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Button, Card, Input } from '../components';
 import { storageService } from '../services/storageService';
-import { fetchCategories, addCategory } from '../services/dataService';
+import { fetchCategories, addCategory, updateCategory, deleteCategory } from '../services/dataService';
 import colors from '../utils/colors';
 
-const CategoriesScreen = () => {
+const CategoriesScreen = ({ navigation }) => {
   const [categories, setCategories] = useState([]);
   const [showAddCategory, setShowAddCategory] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
@@ -17,6 +18,7 @@ const CategoriesScreen = () => {
   const [selectedIcon, setSelectedIcon] = useState('wallet');
   const [selectedColor, setSelectedColor] = useState('#3b82f6');
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   const availableIcons = [
     'wallet', 'restaurant', 'car', 'home', 'bag', 'medical', 'airplane',
@@ -30,24 +32,54 @@ const CategoriesScreen = () => {
     '#06b6d4', '#84cc16', '#f97316', '#6366f1', '#14b8a6', '#f43f5e',
     '#22c55e', '#a855f7', '#0ea5e9', '#eab308', '#d946ef', '#059669'
   ];
-
   useEffect(() => {
     loadCategories();
-  }, []);  const loadCategories = async () => {
+  }, []);
+
+  // Reload categories when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      loadCategories();
+    }, [])
+  );  const loadCategories = async () => {
     setLoading(true);
     try {
       const categoriesData = await fetchCategories();
-      setCategories(categoriesData);
+      setCategories(Array.isArray(categoriesData) ? categoriesData : []);
     } catch (error) {
+      console.error('Load categories error:', error);
       Alert.alert('Error', 'Failed to load categories');
+      setCategories([]);
     } finally {
       setLoading(false);
     }
   };
 
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      const categoriesData = await fetchCategories();
+      setCategories(Array.isArray(categoriesData) ? categoriesData : []);
+    } catch (error) {
+      console.error('Refresh categories error:', error);
+      Alert.alert('Error', 'Failed to refresh categories');
+    } finally {
+      setRefreshing(false);
+    }
+  };
   const validateForm = () => {
     if (!newCategoryName.trim()) {
       Alert.alert('Error', 'Please enter a category name');
+      return false;
+    }
+
+    if (newCategoryName.trim().length < 2) {
+      Alert.alert('Error', 'Category name must be at least 2 characters long');
+      return false;
+    }
+
+    if (newCategoryName.trim().length > 20) {
+      Alert.alert('Error', 'Category name cannot exceed 20 characters');
       return false;
     }
 
@@ -59,13 +91,12 @@ const CategoriesScreen = () => {
     );
 
     if (existingCategory) {
-      Alert.alert('Error', 'A category with this name already exists');
+      Alert.alert('Error', 'A category with this name already exists for this type');
       return false;
     }
 
     return true;
   };
-
   const handleSaveCategory = async () => {
     if (!validateForm()) return;
 
@@ -79,8 +110,9 @@ const CategoriesScreen = () => {
 
       if (editingCategory) {
         // Update existing category
-        await storageService.updateCategory(editingCategory.id, categoryData);
-        Alert.alert('Success', 'Category updated successfully!');      } else {
+        await updateCategory(editingCategory.id, categoryData);
+        Alert.alert('Success', 'Category updated successfully!');
+      } else {
         // Add new category
         await addCategory(categoryData);
         Alert.alert('Success', 'Category added successfully!');
@@ -89,7 +121,8 @@ const CategoriesScreen = () => {
       resetForm();
       loadCategories();
     } catch (error) {
-      Alert.alert('Error', 'Failed to save category');
+      console.error('Save category error:', error);
+      Alert.alert('Error', error.message || 'Failed to save category');
     }
   };
 
@@ -100,12 +133,10 @@ const CategoriesScreen = () => {
     setSelectedIcon(category.icon);
     setSelectedColor(category.color);
     setShowAddCategory(true);
-  };
-
-  const handleDeleteCategory = (categoryId) => {
+  };  const handleDeleteCategory = (categoryId, categoryName) => {
     Alert.alert(
       'Delete Category',
-      'Are you sure you want to delete this category? This action cannot be undone.',
+      `Are you sure you want to delete "${categoryName}"? This action cannot be undone.`,
       [
         { text: 'Cancel', style: 'cancel' },
         { 
@@ -113,11 +144,19 @@ const CategoriesScreen = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              await storageService.deleteCategory(categoryId);
+              await deleteCategory(categoryId);
               loadCategories();
               Alert.alert('Success', 'Category deleted successfully!');
             } catch (error) {
-              Alert.alert('Error', 'Failed to delete category');
+              console.error('Delete category error:', error);
+              if (error.message.includes('being used in transactions')) {
+                Alert.alert(
+                  'Cannot Delete Category', 
+                  'This category is currently being used in transactions. Please remove or change the category in those transactions first.'
+                );
+              } else {
+                Alert.alert('Error', error.message || 'Failed to delete category');
+              }
             }
           }
         }
@@ -156,11 +195,10 @@ const CategoriesScreen = () => {
               <Text style={styles.categoryName}>{category.name}</Text>
               <Text style={styles.categoryType}>{category.type}</Text>
             </View>
-          </View>
-          <TouchableOpacity
+          </View>          <TouchableOpacity
             onPress={(e) => {
               e.stopPropagation();
-              handleDeleteCategory(category.id);
+              handleDeleteCategory(category.id, category.name);
             }}
             style={styles.deleteButton}
             activeOpacity={0.6}
@@ -183,13 +221,18 @@ const CategoriesScreen = () => {
           <View style={styles.headerLeft}>
             <Ionicons name="grid" size={28} color="white" style={styles.headerIcon} />
             <Text style={styles.headerTitle}>Categories</Text>
-          </View>
-          <View style={styles.headerRight}>
-            <TouchableOpacity style={styles.headerButton}>
-              <Ionicons name="notifications-outline" size={22} color="white" />
+          </View>          <View style={styles.headerRight}>
+            <TouchableOpacity 
+              style={styles.headerButton}
+              onPress={() => navigation.navigate('Add')}
+            >
+              <Ionicons name="add-outline" size={22} color="white" />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.headerButton}>
-              <Ionicons name="menu-outline" size={22} color="white" />
+            <TouchableOpacity 
+              style={styles.headerButton}
+              onPress={() => navigation.navigate('Analytics')}
+            >
+              <Ionicons name="analytics-outline" size={22} color="white" />
             </TouchableOpacity>
           </View>
         </View>
@@ -200,7 +243,18 @@ const CategoriesScreen = () => {
           <Text style={styles.loadingText}>Loading categories...</Text>
         </View>
       ) : (
-        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        <ScrollView 
+          style={styles.scrollView} 
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[colors.secondary.cyan]}
+              tintColor={colors.secondary.cyan}
+            />
+          }
+        >
           <View style={styles.content}>        {/* Add Category Button */}
         {!showAddCategory && (
           <TouchableOpacity 

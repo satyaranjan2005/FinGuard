@@ -653,28 +653,99 @@ export const saveTransaction = async (transaction) => {
     const storedTransactions = await AsyncStorage.getItem('transactions');
     const transactions = storedTransactions 
       ? JSON.parse(storedTransactions) 
-      : SAMPLE_TRANSACTIONS;
+      : [];
     
-    // Add new transaction with ID and date
+    // Add new transaction with ID and preserve the date if provided
     const newTransaction = {
       ...transaction,
       id: `t${Date.now()}`,
-      date: new Date()
+      date: transaction.date || new Date().toISOString(),
+      createdAt: transaction.createdAt || new Date().toISOString()
     };
     
-    // Save updated transactions array
-    await AsyncStorage.setItem(
-      'transactions', 
-      JSON.stringify([newTransaction, ...transactions])
-    );
+    // Save updated transactions array (newest first)
+    const updatedTransactions = [newTransaction, ...transactions];
+    await AsyncStorage.setItem('transactions', JSON.stringify(updatedTransactions));
     
     // Update balance data
     await updateBalanceFromTransaction(newTransaction);
     
-    return true;
+    return newTransaction;
   } catch (error) {
     console.error('Error saving transaction:', error);
-    return false;
+    throw error;
+  }
+};
+
+/**
+ * Update an existing transaction
+ * @param {string} transactionId - ID of transaction to update
+ * @param {Object} updatedTransaction - Updated transaction data
+ * @returns {Promise<Object>} Updated transaction
+ */
+export const updateTransaction = async (transactionId, updatedTransaction) => {
+  try {
+    const storedTransactions = await AsyncStorage.getItem('transactions');
+    const transactions = storedTransactions ? JSON.parse(storedTransactions) : [];
+    
+    const transactionIndex = transactions.findIndex(t => t.id === transactionId);
+    if (transactionIndex === -1) {
+      throw new Error('Transaction not found');
+    }
+    
+    const oldTransaction = transactions[transactionIndex];
+    transactions[transactionIndex] = {
+      ...oldTransaction,
+      ...updatedTransaction,
+      id: transactionId, // Ensure ID doesn't change
+      updatedAt: new Date().toISOString()
+    };
+    
+    await AsyncStorage.setItem('transactions', JSON.stringify(transactions));
+    
+    // Update balance if amount or type changed
+    if (oldTransaction.amount !== updatedTransaction.amount || oldTransaction.type !== updatedTransaction.type) {
+      await updateBalanceFromTransaction(transactions[transactionIndex], oldTransaction);
+    }
+    
+    return transactions[transactionIndex];
+  } catch (error) {
+    console.error('Error updating transaction:', error);
+    throw error;
+  }
+};
+
+/**
+ * Delete a transaction
+ * @param {string} transactionId - ID of transaction to delete
+ * @returns {Promise<boolean>} Success status
+ */
+export const deleteTransaction = async (transactionId) => {
+  try {
+    const storedTransactions = await AsyncStorage.getItem('transactions');
+    const transactions = storedTransactions ? JSON.parse(storedTransactions) : [];
+    
+    const transactionIndex = transactions.findIndex(t => t.id === transactionId);
+    if (transactionIndex === -1) {
+      throw new Error('Transaction not found');
+    }
+    
+    const deletedTransaction = transactions[transactionIndex];
+    transactions.splice(transactionIndex, 1);
+    
+    await AsyncStorage.setItem('transactions', JSON.stringify(transactions));
+    
+    // Reverse the balance change
+    const reverseTransaction = {
+      ...deletedTransaction,
+      type: deletedTransaction.type === 'income' ? 'expense' : 'income'
+    };
+    await updateBalanceFromTransaction(reverseTransaction);
+    
+    return true;
+  } catch (error) {
+    console.error('Error deleting transaction:', error);
+    throw error;
   }
 };
 
@@ -769,6 +840,129 @@ export const addCategory = async (category) => {
     return newCategory;
   } catch (error) {
     console.error('Error adding category:', error);
+    throw error;
+  }
+};
+
+/**
+ * Update a category
+ * @param {string} categoryId - ID of category to update
+ * @param {Object} updatedCategory - Updated category data
+ * @returns {Promise<Object>} Updated category
+ */
+export const updateCategory = async (categoryId, updatedCategory) => {
+  try {
+    const categories = await fetchCategories();
+    const categoryIndex = categories.findIndex(c => c.id === categoryId);
+    
+    if (categoryIndex === -1) {
+      throw new Error('Category not found');
+    }
+    
+    categories[categoryIndex] = {
+      ...categories[categoryIndex],
+      ...updatedCategory,
+      id: categoryId, // Ensure ID doesn't change
+      updatedAt: new Date().toISOString()
+    };
+    
+    await AsyncStorage.setItem('categories', JSON.stringify(categories));
+    return categories[categoryIndex];
+  } catch (error) {
+    console.error('Error updating category:', error);
+    throw error;
+  }
+};
+
+/**
+ * Delete a category
+ * @param {string} categoryId - ID of category to delete
+ * @returns {Promise<boolean>} Success status
+ */
+export const deleteCategory = async (categoryId) => {
+  try {
+    // Check if category is being used in transactions
+    const transactions = await fetchRecentTransactions(1000);
+    const isUsed = transactions.some(t => t.category === categoryId || t.categoryId === categoryId);
+    
+    if (isUsed) {
+      throw new Error('Cannot delete category that is being used in transactions');
+    }
+    
+    const categories = await fetchCategories();
+    const filteredCategories = categories.filter(c => c.id !== categoryId);
+    
+    await AsyncStorage.setItem('categories', JSON.stringify(filteredCategories));
+    return true;
+  } catch (error) {
+    console.error('Error deleting category:', error);
+    throw error;
+  }
+};
+
+/**
+ * Save or update a budget
+ * @param {Object} budget - Budget object
+ * @returns {Promise<Object>} Saved budget
+ */
+export const saveBudget = async (budget) => {
+  try {
+    const budgets = await fetchBudgets();
+    const currentMonth = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
+    
+    const newBudget = {
+      ...budget,
+      id: budget.id || `budget${Date.now()}`,
+      month: currentMonth,
+      year: currentYear,
+      createdAt: budget.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    
+    const existingIndex = budgets.findIndex(b => b.id === newBudget.id);
+    if (existingIndex !== -1) {
+      budgets[existingIndex] = newBudget;
+    } else {
+      budgets.push(newBudget);
+    }
+    
+    await AsyncStorage.setItem('budgets', JSON.stringify(budgets));
+    return newBudget;
+  } catch (error) {
+    console.error('Error saving budget:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get all budgets
+ * @returns {Promise<Array>} Array of budgets
+ */
+export const fetchBudgets = async () => {
+  try {
+    const storedBudgets = await AsyncStorage.getItem('budgets');
+    return storedBudgets ? JSON.parse(storedBudgets) : [];
+  } catch (error) {
+    console.error('Error fetching budgets:', error);
+    return [];
+  }
+};
+
+/**
+ * Delete a budget
+ * @param {string} budgetId - ID of budget to delete
+ * @returns {Promise<boolean>} Success status
+ */
+export const deleteBudget = async (budgetId) => {
+  try {
+    const budgets = await fetchBudgets();
+    const filteredBudgets = budgets.filter(b => b.id !== budgetId);
+    
+    await AsyncStorage.setItem('budgets', JSON.stringify(filteredBudgets));
+    return true;
+  } catch (error) {
+    console.error('Error deleting budget:', error);
     throw error;
   }
 };
@@ -872,8 +1066,7 @@ export const saveGoal = async (goal) => {
     
     const existingIndex = goals.findIndex(g => g.id === newGoal.id);
     if (existingIndex >= 0) {
-      goals[existingIndex] = newGoal;
-    } else {
+      goals[existingIndex] = newGoal;    } else {
       goals.push(newGoal);
     }
     
@@ -886,65 +1079,123 @@ export const saveGoal = async (goal) => {
 };
 
 /**
- * Get spending patterns and analytics
- * @param {number} days - Number of days to analyze (default: 30)
- * @returns {Promise<Object>} Spending analytics
+ * Update an existing goal
+ * @param {string} goalId - ID of goal to update
+ * @param {Object} goalData - Updated goal data
+ * @returns {Promise<Object>} Updated goal
  */
-export const getSpendingAnalytics = async (days = 30) => {
+export const updateGoal = async (goalId, goalData) => {
   try {
-    await delay(600);
+    const goals = await fetchGoals();
+    const goalIndex = goals.findIndex(g => g.id === goalId);
     
-    const transactions = await fetchRecentTransactions(100); // Get more transactions for analysis
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - days);
+    if (goalIndex === -1) {
+      throw new Error('Goal not found');
+    }
     
-    const recentTransactions = transactions.filter(t => new Date(t.date) >= cutoffDate);
-    
-    // Daily spending analysis
-    const dailySpending = {};
-    const weeklySpending = {};
-    const categorySpending = {};
-    
-    recentTransactions.forEach(transaction => {
-      if (transaction.type === 'expense') {
-        const date = new Date(transaction.date);
-        const dayKey = date.toISOString().split('T')[0];
-        const weekKey = `${date.getFullYear()}-W${Math.ceil(date.getDate() / 7)}`;
-        
-        dailySpending[dayKey] = (dailySpending[dayKey] || 0) + transaction.amount;
-        weeklySpending[weekKey] = (weeklySpending[weekKey] || 0) + transaction.amount;
-        categorySpending[transaction.category] = (categorySpending[transaction.category] || 0) + transaction.amount;
-      }
-    });
-      // Calculate averages
-    const dailyAverage = Object.values(dailySpending).reduce((sum, val) => sum + val, 0) / Object.keys(dailySpending).length || 0;
-    const weeklyAverage = Object.values(weeklySpending).reduce((sum, val) => sum + val, 0) / Object.keys(weeklySpending).length || 0;
-    
-    // Top spending categories with safety check
-    const categoryEntries = Object.entries(categorySpending);
-    const topCategories = categoryEntries.length > 0 ? 
-      categoryEntries
-        .sort(([,a], [,b]) => b - a)
-        .slice(0, 5)
-        .map(([category, amount]) => ({ 
-          category, 
-          amount, 
-          percentage: (amount / Object.values(categorySpending).reduce((sum, val) => sum + val, 0)) * 100 
-        })) : [];
-    
-    return {
-      dailySpending,
-      weeklySpending,
-      categorySpending,
-      dailyAverage,
-      weeklyAverage,
-      topCategories,
-      totalSpent: Object.values(categorySpending).reduce((sum, val) => sum + val, 0),
-      transactionCount: recentTransactions.length
+    const updatedGoal = {
+      ...goals[goalIndex],
+      ...goalData,
+      id: goalId,
+      updatedAt: new Date().toISOString()
     };
+    
+    goals[goalIndex] = updatedGoal;
+    await AsyncStorage.setItem('goals', JSON.stringify(goals));
+    return updatedGoal;
   } catch (error) {
-    console.error('Error getting spending analytics:', error);
-    return null;
+    console.error('Error updating goal:', error);
+    throw error;
+  }
+};
+
+/**
+ * Delete a goal
+ * @param {string} goalId - ID of goal to delete
+ * @returns {Promise<boolean>} Success status
+ */
+export const deleteGoal = async (goalId) => {
+  try {
+    const goals = await fetchGoals();
+    const filteredGoals = goals.filter(g => g.id !== goalId);
+    
+    await AsyncStorage.setItem('goals', JSON.stringify(filteredGoals));
+    return true;
+  } catch (error) {
+    console.error('Error deleting goal:', error);
+    throw error;
+  }
+};
+
+/**
+ * Add money to a goal
+ * @param {string} goalId - ID of goal
+ * @param {number} amount - Amount to add
+ * @returns {Promise<Object>} Updated goal
+ */
+export const addToGoal = async (goalId, amount) => {
+  try {
+    const goals = await fetchGoals();
+    const goalIndex = goals.findIndex(g => g.id === goalId);
+    
+    if (goalIndex === -1) {
+      throw new Error('Goal not found');
+    }
+    
+    const goal = goals[goalIndex];
+    goal.currentAmount += amount;
+    goal.progressPercentage = (goal.currentAmount / goal.targetAmount) * 100;
+    goal.updatedAt = new Date().toISOString();
+    
+    await AsyncStorage.setItem('goals', JSON.stringify(goals));
+    
+    // Also save as a transaction
+    await saveTransaction({
+      type: 'expense',
+      amount: amount,
+      category: 'Savings',
+      categoryId: 'savings',
+      title: `Contribution to ${goal.title}`,
+      description: `Added to goal: ${goal.title}`,
+      date: new Date().toISOString(),
+      paymentMode: 'goal_contribution',
+      goalId: goalId
+    });
+    
+    return goal;
+  } catch (error) {
+    console.error('Error adding to goal:', error);
+    throw error;
+  }
+};
+
+// Enhanced updateBalanceFromTransaction to handle reversals
+const updateBalanceFromTransactionEnhanced = async (transaction, oldTransaction = null) => {
+  try {
+    const storedData = await AsyncStorage.getItem('userData');
+    const userData = storedData ? JSON.parse(storedData) : SAMPLE_USER_DATA;
+    
+    if (oldTransaction) {
+      // Reverse the old transaction first
+      if (oldTransaction.type === 'income') {
+        userData.balance -= oldTransaction.amount;
+      } else {
+        userData.balance += oldTransaction.amount;
+      }
+    }
+    
+    // Apply the new transaction
+    if (transaction.type === 'income') {
+      userData.balance += transaction.amount;
+    } else {
+      userData.balance -= transaction.amount;
+    }
+    
+    await AsyncStorage.setItem('userData', JSON.stringify(userData));
+    return userData;
+  } catch (error) {
+    console.error('Error updating balance:', error);
+    throw error;
   }
 };
 
