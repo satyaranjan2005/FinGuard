@@ -3,6 +3,41 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+// Helper function to get category colors
+const getCategoryColor = (category) => {
+  const categoryColors = {
+    food: '#FF6B6B',
+    transportation: '#4ECDC4', 
+    shopping: '#45B7D1',
+    entertainment: '#9B59B6',
+    bills: '#F39C12',
+    healthcare: '#E74C3C',
+    income: '#27AE60',
+    education: '#3498DB',
+    investment: '#8E44AD',
+    savings: '#16A085',
+    utilities: '#E67E22',
+    travel: '#2ECC71',
+    subscriptions: '#6C5CE7',
+    gifts: '#FD79A8',
+    clothing: '#FDA7DF',
+    technology: '#0984E3',
+    fitness: '#00CEC9',
+    personal: '#6C5CE7',
+    household: '#74B9FF',
+    pets: '#A29BFE',
+    charity: '#D980FA',
+    taxes: '#C0392B',
+    insurance: '#3498DB',
+    maintenance: '#EE5A24',
+    childcare: '#F78FB3',
+    beauty: '#9980FA',
+    other: '#636E72',
+  };
+  
+  return categoryColors[category?.toLowerCase()] || '#636E72';
+};
+
 // Sample data - In a real app, this would be replaced with API calls or database operations
 const SAMPLE_USER_DATA = {
   name: 'Rajesh Kumar',
@@ -1089,16 +1124,17 @@ export const getSpendingAnalytics = async (days = 30) => {
       const category = t.category || 'Other';
       categorySpending[category] = (categorySpending[category] || 0) + (t.amount || 0);
     });
-    
-    // Calculate percentages and sort categories
+      // Calculate percentages and sort categories
     const topCategories = Object.entries(categorySpending)
       .map(([category, amount]) => ({
         category,
+        name: category.charAt(0).toUpperCase() + category.slice(1), // For chart display
         amount,
-        percentage: totalSpent > 0 ? (amount / totalSpent) * 100 : 0
+        percentage: totalSpent > 0 ? (amount / totalSpent) * 100 : 0,
+        color: getCategoryColor(category) // Add color for chart
       }))
       .sort((a, b) => b.amount - a.amount)
-      .slice(0, 5);
+      .slice(0, 8); // Increase to 8 for better chart display
     
     return {
       totalSpent,

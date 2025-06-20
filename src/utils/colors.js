@@ -47,8 +47,7 @@ export const colors = {
     700: '#334155',
     800: '#1e293b',
     900: '#0f172a',
-  },
-  
+  },  
   // Semantic Colors
   background: '#f8fafc',
   surface: '#ffffff',
@@ -57,6 +56,23 @@ export const colors = {
     secondary: '#6b7280',
     tertiary: '#9ca3af',
   },
+  
+  // Category Colors for Charts
+  categoryColors: [
+    '#4f46e5', // Primary indigo
+    '#06b6d4', // Cyan
+    '#059669', // Green
+    '#f59e0b', // Amber
+    '#dc2626', // Red
+    '#7c3aed', // Purple
+    '#0891b2', // Dark cyan
+    '#047857', // Dark green
+    '#d97706', // Dark amber
+    '#b91c1c', // Dark red
+    '#8b5cf6', // Light purple
+    '#6366f1', // Indigo variant
+  ],
+  
     // Gradient Combinations
   gradients: {
     budget: ['#4f46e5', '#7c3aed'],

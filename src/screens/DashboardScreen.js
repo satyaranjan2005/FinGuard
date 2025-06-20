@@ -4,11 +4,19 @@ import { FontAwesome5, MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { fetchUserData, fetchRecentTransactions, fetchBudgetSummary } from '../services/dataService';
-import ExpenseSummaryChart from '../components/ExpenseSummaryChart';
+import { 
+  fetchUserData, 
+  fetchRecentTransactions, 
+  fetchBudgetSummary, 
+  getCurrentBalance,
+  fetchBudgets,
+  fetchGoals,
+  getSpendingAnalytics,
+  getFinancialInsights
+} from '../services/dataService';
 import TransactionItem from '../components/TransactionItem';
 import { TransactionSkeleton, CardSkeleton } from '../components/LoadingSkeleton';
-import colors from '../utils/colors';
+import { colors } from '../utils/colors';
 import {
 StyleSheet, 
 View, 
@@ -27,24 +35,50 @@ const [refreshing, setRefreshing] = useState(false);
 const [userData, setUserData] = useState(null);
 const [transactions, setTransactions] = useState([]);
 const [budgetData, setBudgetData] = useState({ categories: [] });
+const [budgets, setBudgets] = useState([]);
+const [goals, setGoals] = useState([]);
+const [spendingAnalytics, setSpendingAnalytics] = useState(null);
+const [financialInsights, setFinancialInsights] = useState(null);
+const [currentBalance, setCurrentBalance] = useState(0);
 const [error, setError] = useState(null);
-
 const fetchDashboardData = async () => {
   try {
     setLoading(true);
     setError(null);
     
-    // In a real app, these would be API calls or AsyncStorage reads
-    const user = await fetchUserData();
-    const recentTransactions = await fetchRecentTransactions(5); // Get 5 most recent transactions
-    const budgetSummary = await fetchBudgetSummary();
+    // Fetch all dashboard data in parallel for better performance
+    const [
+      user,
+      recentTransactions,
+      budgetSummary,
+      balance,
+      budgetsList,
+      goalsList,
+      analytics,
+      insights
+    ] = await Promise.all([
+      fetchUserData(),
+      fetchRecentTransactions(100), // Get more transactions for expense analysis
+      fetchBudgetSummary(),
+      getCurrentBalance(),
+      fetchBudgets(),
+      fetchGoals(),
+      getSpendingAnalytics(30), // Use 30 days period
+      getFinancialInsights()
+    ]);
     
     setUserData(user);
-    setTransactions(recentTransactions);
-    setBudgetData(budgetSummary);
+    setTransactions(recentTransactions || []);
+    setBudgetData(budgetSummary || { categories: [] });
+    setCurrentBalance(balance);
+    setBudgets(budgetsList || []);
+    setGoals(goalsList || []);
+    setSpendingAnalytics(analytics);
+    setFinancialInsights(insights);
+    
   } catch (err) {
     setError('Failed to load dashboard data');
-    console.error(err);
+    console.error('Dashboard data fetch error:', err);
   } finally {
     setLoading(false);
     setRefreshing(false);
@@ -104,7 +138,7 @@ return (
       <View style={styles.headerBalanceCard}>
         <View style={styles.headerBalanceSection}>
           <Text style={styles.headerBalanceLabel}>Current Balance</Text>          <Text style={styles.headerBalanceAmount}>
-            ₹{userData?.balance?.toFixed(2) || '0.00'}
+            ₹{currentBalance?.toFixed(2) || '0.00'}
           </Text>
         </View>
         
@@ -146,7 +180,7 @@ return (
           style={styles.actionButton}
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            navigation.navigate('Add');
+            navigation.navigate('AddTransaction');
           }}
         >
           <View style={styles.actionButtonIcon}>
@@ -180,8 +214,7 @@ return (
           </View>
           <Text style={styles.actionButtonText}>Goals</Text>
         </TouchableOpacity>
-        
-        <TouchableOpacity 
+          <TouchableOpacity 
           style={styles.actionButton}
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -197,8 +230,7 @@ return (
       {budgetData && budgetData.total !== undefined && budgetData.spent !== undefined && (
         <View style={styles.sectionContainer}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Monthly Budget</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('BudgetDetails')}>
+            <Text style={styles.sectionTitle}>Monthly Budget</Text>            <TouchableOpacity onPress={() => navigation.navigate('Budget')}>
               <Text style={styles.seeAllText}>See All</Text>
             </TouchableOpacity>
           </View>
@@ -232,34 +264,148 @@ return (
           </View>
         </View>      )}
 
-      <View style={styles.sectionSeparator} />
-      
-      {/* Expense summary chart */}
-      <View style={styles.sectionContainer}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Expense Summary</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('ExpenseAnalytics')}>
-            <Text style={styles.seeAllText}>Details</Text>
-          </TouchableOpacity>
-        </View>        <View style={styles.chartContainer}>
-          <ExpenseSummaryChart data={budgetData?.categories || []} />
-        </View></View>
+      {/* Financial Health Indicators */}
+      {financialInsights && (
+        <View style={styles.sectionContainer}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Financial Health</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Analytics')}>
+              <Text style={styles.seeAllText}>Details</Text>
+            </TouchableOpacity>
+          </View>
+          
+          <View style={styles.healthIndicatorsContainer}>
+            <View style={styles.healthIndicator}>
+              <View style={[styles.healthIndicatorIcon, { backgroundColor: '#4CAF50' }]}>
+                <Ionicons name="trending-up" size={20} color="white" />
+              </View>              <View style={styles.healthIndicatorContent}>
+                <Text style={styles.healthIndicatorLabel}>Savings Rate</Text>
+                <Text style={styles.healthIndicatorValue}>
+                  {(financialInsights.savingsRate || 0).toFixed(2)}%
+                </Text>
+              </View>
+            </View>
+            
+            <View style={styles.healthIndicator}>
+              <View style={[styles.healthIndicatorIcon, { backgroundColor: '#FF9800' }]}>
+                <Ionicons name="speedometer" size={20} color="white" />
+              </View>
+              <View style={styles.healthIndicatorContent}>
+                <Text style={styles.healthIndicatorLabel}>Expense Ratio</Text>
+                <Text style={styles.healthIndicatorValue}>
+                  {(financialInsights.expenseRatio || 0).toFixed(2)}%
+                </Text>
+              </View>
+            </View>
+          </View>
+          
+          {financialInsights.tip && (
+            <View style={styles.financialTipContainer}>
+              <Ionicons name="bulb" size={16} color="#FFA726" />
+              <Text style={styles.financialTipText}>{financialInsights.tip}</Text>
+            </View>
+          )}
+        </View>
+      )}
 
-      <View style={styles.sectionSeparator} />
+      {/* Goals Progress */}
+      {goals && goals.length > 0 && (
+        <View style={styles.sectionContainer}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Goals Progress</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Goals')}>
+              <Text style={styles.seeAllText}>See All</Text>
+            </TouchableOpacity>
+          </View>
+          
+          {goals.slice(0, 2).map((goal) => (
+            <View key={goal.id} style={styles.goalProgressItem}>
+              <View style={styles.goalHeader}>
+                <Text style={styles.goalName}>{goal.name}</Text>
+                <Text style={styles.goalProgress}>
+                  {Math.round((goal.currentAmount / goal.targetAmount) * 100)}%
+                </Text>
+              </View>
+              <View style={styles.goalProgressBarContainer}>
+                <View 
+                  style={[
+                    styles.goalProgressBar, 
+                    { 
+                      width: `${Math.min((goal.currentAmount / goal.targetAmount) * 100, 100)}%`,
+                      backgroundColor: goal.currentAmount >= goal.targetAmount ? '#4CAF50' : '#4F8EF7'
+                    }
+                  ]} 
+                />
+              </View>
+              <Text style={styles.goalAmountText}>
+                ₹{goal.currentAmount.toFixed(2)} of ₹{goal.targetAmount.toFixed(2)}
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {/* Budget Alerts */}
+      {budgets && budgets.length > 0 && (
+        <View style={styles.sectionContainer}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Budget Alerts</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Budget')}>
+              <Text style={styles.seeAllText}>Manage</Text>
+            </TouchableOpacity>
+          </View>
+          
+          {budgets
+            .filter(budget => {
+              const spent = budget.spent || 0;
+              const limit = budget.amount || 1;
+              return spent / limit > 0.8; // Show budgets over 80% usage
+            })
+            .slice(0, 3)
+            .map((budget) => {
+              const percentUsed = Math.round((budget.spent / budget.amount) * 100);
+              const isOverBudget = percentUsed > 100;
+              
+              return (
+                <View key={budget.id} style={styles.budgetAlertItem}>
+                  <View style={styles.budgetAlertHeader}>
+                    <Text style={styles.budgetAlertCategory}>{budget.category}</Text>
+                    <Text style={[
+                      styles.budgetAlertPercentage,
+                      { color: isOverBudget ? '#F44336' : '#FF9800' }
+                    ]}>
+                      {percentUsed}%
+                    </Text>
+                  </View>
+                  <Text style={styles.budgetAlertText}>
+                    {isOverBudget 
+                      ? `Over budget by ₹${(budget.spent - budget.amount).toFixed(2)}`
+                      : `₹${(budget.amount - budget.spent).toFixed(2)} remaining`
+                    }
+                  </Text>
+                </View>
+              );
+            })
+          }
+          
+          {budgets.filter(budget => (budget.spent / budget.amount) > 0.8).length === 0 && (
+            <Text style={styles.emptyStateText}>All budgets are on track! 🎉</Text>
+          )}
+        </View>
+      )}      <View style={styles.sectionSeparator} />
       
       {/* Recent transactions */}
       <View style={styles.sectionContainer}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Recent Transactions</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('Transactions')}>
+          <Text style={styles.sectionTitle}>Recent Transactions</Text>          <TouchableOpacity onPress={() => navigation.navigate('TransactionHistory')}>
             <Text style={styles.seeAllText}>See All</Text>
           </TouchableOpacity>
-        </View>
-          {loading ? (
+        </View>          {loading ? (
           // Show loading skeletons with safety check
           Array.isArray(Array.from({ length: 4 })) ? Array.from({ length: 4 }).map((_, index) => (
             <TransactionSkeleton key={`skeleton-${index}`} />
-          )) : null        ) : !transactions || !Array.isArray(transactions) || transactions.length === 0 ? (
+          )) : null
+        ) : !transactions || !Array.isArray(transactions) || transactions.length === 0 ? (
           <Text style={styles.emptyStateText}>No recent transactions</Text>
         ) : (
           // Ensure transactions is an array before mapping
@@ -269,13 +415,11 @@ return (
                 key={transaction.id} 
                 transaction={transaction}
                 onPress={() => {
-                  Alert.alert(
-                    'Transaction Details',
-                    `Transaction ID: ${transaction.id}\nAmount: ₹${parseFloat(transaction.amount || 0).toFixed(2)}\nType: ${transaction.type || 'unknown'}`,
-                    [{ text: 'OK' }]
-                  );
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  navigation.navigate('TransactionHistory');
                 }}
-              />            ) : null
+              />
+            ) : null
           )) : null
         )}
       </View>
@@ -552,6 +696,244 @@ emptyStateText: {
   color: '#666',
   fontSize: 14,
   paddingVertical: 16,
+},
+
+// Financial Health Styles
+healthIndicatorsContainer: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  marginBottom: 16,
+},
+healthIndicator: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  flex: 1,
+  backgroundColor: '#F8F9FA',
+  padding: 12,
+  borderRadius: 12,
+  marginHorizontal: 4,
+},
+healthIndicatorIcon: {
+  width: 36,
+  height: 36,
+  borderRadius: 18,
+  alignItems: 'center',
+  justifyContent: 'center',
+  marginRight: 12,
+},
+healthIndicatorContent: {
+  flex: 1,
+},
+healthIndicatorLabel: {
+  fontSize: 12,
+  color: '#666',
+  marginBottom: 2,
+},
+healthIndicatorValue: {
+  fontSize: 16,
+  fontWeight: '700',
+  color: '#333',
+},
+financialTipContainer: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  backgroundColor: '#FFF3E0',
+  padding: 12,
+  borderRadius: 8,
+  borderLeftWidth: 4,
+  borderLeftColor: '#FFA726',
+},
+financialTipText: {
+  fontSize: 14,
+  color: '#F57C00',
+  marginLeft: 8,
+  flex: 1,
+  lineHeight: 18,
+},
+
+// Goals Progress Styles
+goalProgressItem: {
+  marginBottom: 16,
+  paddingBottom: 16,
+  borderBottomWidth: 1,
+  borderBottomColor: '#F0F0F0',
+},
+goalHeader: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  marginBottom: 8,
+},
+goalName: {
+  fontSize: 16,
+  fontWeight: '600',
+  color: '#333',
+  flex: 1,
+},
+goalProgress: {
+  fontSize: 14,
+  fontWeight: '700',
+  color: '#4F8EF7',
+},
+goalProgressBarContainer: {
+  height: 6,
+  backgroundColor: '#E0E0E0',
+  borderRadius: 3,
+  marginBottom: 8,
+  overflow: 'hidden',
+},
+goalProgressBar: {
+  height: '100%',
+  borderRadius: 3,
+},
+goalAmountText: {
+  fontSize: 12,
+  color: '#666',
+  textAlign: 'right',
+},
+
+// Budget Alerts Styles
+budgetAlertItem: {
+  backgroundColor: '#FFF3E0',
+  padding: 12,
+  borderRadius: 8,
+  marginBottom: 8,
+  borderLeftWidth: 4,
+  borderLeftColor: '#FF9800',
+},
+budgetAlertHeader: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  marginBottom: 4,
+},
+budgetAlertCategory: {
+  fontSize: 14,
+  fontWeight: '600',
+  color: '#333',
+  textTransform: 'capitalize',
+},
+budgetAlertPercentage: {
+  fontSize: 14,
+  fontWeight: '700',
+},
+budgetAlertText: {
+  fontSize: 12,
+  color: '#666',
+},
+
+// Enhanced Expense Summary Styles
+expenseDetailsContainer: {
+  marginTop: 16,
+  padding: 16,
+  backgroundColor: colors.surface,
+  borderRadius: 12,
+  borderWidth: 1,
+  borderColor: colors.neutral[200],
+},
+expenseDetailsTitle: {
+  fontSize: 18,
+  fontWeight: 'bold',
+  color: colors.text.primary,
+  marginBottom: 16,
+},
+expenseDetailsSubtitle: {
+  fontSize: 14,
+  fontWeight: '600',
+  color: colors.text.primary,
+  marginBottom: 12,
+  marginTop: 8,
+},
+topCategoriesContainer: {
+  marginBottom: 20,
+},
+topCategoryItem: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  paddingVertical: 12,
+  paddingHorizontal: 8,
+  backgroundColor: colors.neutral[50],
+  borderRadius: 8,
+  marginBottom: 8,
+},
+topCategoryRank: {
+  width: 24,
+  height: 24,
+  borderRadius: 12,
+  backgroundColor: colors.primary.main,
+  alignItems: 'center',
+  justifyContent: 'center',
+  marginRight: 12,
+},
+topCategoryRankText: {
+  fontSize: 12,
+  fontWeight: 'bold',
+  color: 'white',
+},
+topCategoryInfo: {
+  flex: 1,
+},
+topCategoryName: {
+  fontSize: 14,
+  fontWeight: '600',
+  color: colors.text.primary,
+},
+topCategoryAmount: {
+  fontSize: 12,
+  color: colors.text.secondary,
+  marginTop: 2,
+},
+topCategoryPercentage: {
+  alignItems: 'flex-end',
+},
+topCategoryPercentageText: {
+  fontSize: 14,
+  fontWeight: 'bold',
+  color: colors.primary.main,
+},
+periodSummaryContainer: {
+  marginBottom: 20,
+},
+periodSummaryGrid: {
+  flexDirection: 'row',
+  flexWrap: 'wrap',
+  justifyContent: 'space-between',
+},
+periodSummaryItem: {
+  width: '48%',
+  backgroundColor: colors.neutral[50],
+  borderRadius: 8,
+  padding: 12,
+  marginBottom: 8,
+  alignItems: 'center',
+},
+periodSummaryLabel: {
+  fontSize: 12,
+  color: colors.text.secondary,
+  marginBottom: 4,
+},
+periodSummaryValue: {
+  fontSize: 16,
+  fontWeight: 'bold',
+  color: colors.text.primary,
+},
+spendingTrendContainer: {
+  marginBottom: 8,
+},
+spendingTrendItem: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  paddingVertical: 8,
+  paddingHorizontal: 12,
+  backgroundColor: colors.neutral[50],
+  borderRadius: 8,
+  marginBottom: 8,
+},
+spendingTrendText: {
+  fontSize: 13,
+  color: colors.text.secondary,
+  marginLeft: 12,
+  flex: 1,
 }
 });
 
