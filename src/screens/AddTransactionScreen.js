@@ -9,6 +9,12 @@ import { Button, Card, Input } from '../components';
 import { storageService } from '../services/storageService';
 import { fetchCategories, saveTransaction, updateTransaction, getCurrentBalance, validateTransaction } from '../services/dataService';
 import { addEventListener, removeEventListener, EVENTS, emitEvent } from '../utils/eventEmitter';
+import { 
+  showSuccessAlert, 
+  showErrorAlert, 
+  showWarningAlert,
+  showConfirmationAlert 
+} from '../services/alertService';
 
 const AddTransactionScreen = ({ navigation, route }) => {
   const { transaction: editTransaction } = route?.params || {};
@@ -110,33 +116,31 @@ const AddTransactionScreen = ({ navigation, route }) => {
     // Validate amount
     const cleanAmount = amount.replace(/[^\d.]/g, '');
     const numAmount = parseFloat(cleanAmount);
-    
-    if (!amount.trim() || isNaN(numAmount) || numAmount <= 0) {
-      Alert.alert('Validation Error', 'Please enter a valid amount greater than 0');
+      if (!amount.trim() || isNaN(numAmount) || numAmount <= 0) {
+      showErrorAlert('Validation Error', 'Please enter a valid amount greater than 0');
       return false;
     }
     
     if (numAmount > 999999.99) {
-      Alert.alert('Validation Error', 'Amount cannot exceed ₹9,99,999.99');
+      showErrorAlert('Validation Error', 'Amount cannot exceed ₹9,99,999.99');
       return false;
     }
     
     // Validate category selection
     if (!categoryId) {
-      Alert.alert('Validation Error', 'Please select a category');
+      showErrorAlert('Validation Error', 'Please select a category');
       return false;
     }
     
     // Validate category exists in current type
     const selectedCategory = categories.find(cat => cat.id === categoryId && cat.type === type);
     if (!selectedCategory) {
-      Alert.alert('Validation Error', 'Selected category is not valid for this transaction type');
-      return false;
-    }
+      showErrorAlert('Validation Error', 'Selected category is not valid for this transaction type');
+      return false;    }
     
     // Validate date
     if (!date) {
-      Alert.alert('Validation Error', 'Please select a transaction date');
+      showErrorAlert('Validation Error', 'Please select a transaction date');
       return false;
     }
     
@@ -146,18 +150,18 @@ const AddTransactionScreen = ({ navigation, route }) => {
     oneYearAgo.setFullYear(today.getFullYear() - 1);
     
     if (selectedDate > today) {
-      Alert.alert('Validation Error', 'Transaction date cannot be in the future');
+      showErrorAlert('Validation Error', 'Transaction date cannot be in the future');
       return false;
     }
       if (selectedDate < oneYearAgo) {
-      Alert.alert('Validation Error', 'Transaction date cannot be more than one year ago');
+      showErrorAlert('Validation Error', 'Transaction date cannot be more than one year ago');
       return false;
     }
     
     // Validate balance for expense transactions (for new transactions only)
     if (!isEditing && type === 'expense') {
       if (currentBalance === 0) {
-        Alert.alert('Transaction Blocked', 'Cannot add expenses when your balance is zero. Please add income first.');
+        showWarningAlert('Transaction Blocked', 'Cannot add expenses when your balance is zero. Please add income first.');
         return false;
       }
       
@@ -192,20 +196,18 @@ const AddTransactionScreen = ({ navigation, route }) => {
         date: date + 'T' + new Date().toTimeString().split(' ')[0], // Add time to date
         createdAt: isEditing ? editTransaction.createdAt : new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-      };
-
-      // For new expense transactions, validate balance
+      };      // For new expense transactions, validate balance
       if (!isEditing && type === 'expense') {
         const validation = await validateTransaction(transactionData);
         if (!validation.isValid) {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-          Alert.alert('Transaction Blocked', validation.message);
+          showWarningAlert('Transaction Blocked', validation.message);
           return;
         }
       }if (isEditing) {
         await updateTransaction(editTransaction.id, transactionData);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        Alert.alert('Success', 'Transaction updated successfully!', [
+        showSuccessAlert('Success', 'Transaction updated successfully!', [
           { text: 'OK', onPress: () => navigation.goBack() }
         ]);      } else {
         const savedTransaction = await saveTransaction(transactionData);
@@ -214,15 +216,14 @@ const AddTransactionScreen = ({ navigation, route }) => {
         
         // Refresh balance after successful transaction
         await loadCurrentBalance();
-        
-        // Manually emit events to ensure all screens are updated
+          // Manually emit events to ensure all screens are updated
         emitEvent(EVENTS.TRANSACTION_ADDED, { transaction: savedTransaction });
         emitEvent(EVENTS.BALANCE_CHANGED);
         if (savedTransaction.type === 'expense') {
           emitEvent(EVENTS.BUDGET_UPDATED);
         }
         
-        Alert.alert(
+        showSuccessAlert(
           'Success', 
           `Transaction of ₹${transactionData.amount} added successfully!`,
           [
@@ -235,8 +236,7 @@ const AddTransactionScreen = ({ navigation, route }) => {
             { 
               text: 'View All', 
               onPress: () => navigation.navigate('TransactionHistory') 
-            },
-            { 
+            },            { 
               text: 'Done', 
               style: 'cancel',
               onPress: () => navigation.navigate('Dashboard') 
@@ -247,7 +247,7 @@ const AddTransactionScreen = ({ navigation, route }) => {
     } catch (error) {
       console.error('Save transaction error:', error);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Error', error.message || 'Failed to save transaction');
+      showErrorAlert('Error', error.message || 'Failed to save transaction');
     } finally {
       setLoading(false);
     }

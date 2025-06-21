@@ -7,6 +7,8 @@ import AuthScreen from './src/screens/AuthScreen';
 import { authService } from './src/services/authService';
 import { initializeAppData } from './src/services/dataService';
 import { initializePermissions } from './src/services/permissionService';
+import { CustomAlert } from './src/components';
+import { subscribeToAlerts } from './src/services/alertService';
 
 // Configure notification behavior
 Notifications.setNotificationHandler({
@@ -21,9 +23,19 @@ export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState(null);
+  const [alertConfig, setAlertConfig] = useState(null);
 
   useEffect(() => {
     initializeApp();
+  }, []);
+
+  useEffect(() => {
+    // Subscribe to global alert events
+    const unsubscribe = subscribeToAlerts((config) => {
+      setAlertConfig(config);
+    });
+
+    return unsubscribe;
   }, []);
 
   const initializeApp = async () => {
@@ -92,7 +104,17 @@ export default function App() {
       ) : (
         <AuthScreen onAuthSuccess={handleAuthSuccess} />
       )}
-      <StatusBar style="auto" translucent backgroundColor="transparent" />
+      <StatusBar style="auto" translucent/>
+      
+      {/* Global Custom Alert */}
+      <CustomAlert
+        visible={!!alertConfig}
+        title={alertConfig?.title}
+        message={alertConfig?.message}
+        type={alertConfig?.type}
+        buttons={alertConfig?.buttons}
+        onClose={() => setAlertConfig(null)}
+      />
     </SafeAreaProvider>
   );
 }

@@ -8,4 +8,5 @@ export { default as TransactionItem } from './TransactionItem';
 export { default as FinancialTip } from './FinancialTip';
 export { default as ExpenseAnalysisSummary } from './ExpenseAnalysisSummary';
 export { default as MonthlyBudgetCard } from './MonthlyBudgetCard';
+export { default as CustomAlert } from './CustomAlert';
 export { LoadingSkeleton, TransactionSkeleton, CardSkeleton } from './LoadingSkeleton';

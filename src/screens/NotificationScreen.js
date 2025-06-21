@@ -30,6 +30,15 @@ import {
 } from '../services/notificationService';
 import { showPermissionSettingsAlert } from '../services/permissionService';
 import { addEventListener, removeEventListener, EVENTS } from '../utils/eventEmitter';
+import { 
+  showSuccessAlert, 
+  showErrorAlert, 
+  showWarningAlert,
+  showInfoAlert,
+  showConfirmationAlert,
+  showDestructiveAlert,
+  showThreeButtonAlert
+} from '../services/alertService';
 
 const NotificationScreen = ({ navigation }) => {
   const [notifications, setNotifications] = useState([]);
@@ -111,27 +120,23 @@ const NotificationScreen = ({ navigation }) => {
       await loadData();
     }
   };
-
   const clearAllNotificationsHandler = () => {
-    Alert.alert(
+    showConfirmationAlert(
       'Clear All Notifications',
       'Are you sure you want to clear all notifications?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Clear All', 
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await clearAllNotifications();
-              setNotifications([]);
-            } catch (error) {
-              console.error('Error clearing notifications:', error);
-              Alert.alert('Error', 'Failed to clear notifications. Please try again.');
-            }
-          }
+      async () => {
+        try {
+          await clearAllNotifications();
+          setNotifications([]);
+        } catch (error) {
+          console.error('Error clearing notifications:', error);
+          showErrorAlert('Error', 'Failed to clear notifications. Please try again.');
         }
-      ]
+      },
+      null,
+      'Clear All',
+      'Cancel',
+      'warning'
     );
   };
 
@@ -148,26 +153,77 @@ const NotificationScreen = ({ navigation }) => {
       console.error('Error marking all as read:', error);
       // Revert if storage update fails
       await loadData();    }
-  };
-  const createTestNotificationHandler = async () => {
+  };  const createTestNotificationHandler = async () => {
     try {
       await createTestNotification();
       // Refresh notifications to show the new test notification
       await loadData();
     } catch (error) {
       console.error('Error creating test notification:', error);
-      Alert.alert('Error', error.message || 'Failed to create test notification');
+      showErrorAlert('Error', error.message || 'Failed to create test notification');
     }
   };
-
   const sendDirectNotificationHandler = async () => {
     try {
       await sendDirectTestNotification();
-      Alert.alert('Success', 'Direct notification sent! Check your device status bar.');
+      showSuccessAlert('Success', 'Direct notification sent! Check your device status bar.');
     } catch (error) {
       console.error('Error sending direct notification:', error);
-      Alert.alert('Error', error.message || 'Failed to send direct notification');
+      showErrorAlert('Error', error.message || 'Failed to send direct notification');
     }
+  };
+
+  // Alert demo functions
+  const showSuccessDemo = () => {
+    showSuccessAlert('Success!', 'This is a beautiful success alert with a smooth animation.');
+  };
+
+  const showWarningDemo = () => {
+    showWarningAlert('Warning!', 'This is a warning alert to get your attention about something important.');
+  };
+
+  const showErrorDemo = () => {
+    showErrorAlert('Error!', 'This is an error alert that indicates something went wrong.');
+  };
+
+  const showInfoDemo = () => {
+    showInfoAlert('Information', 'This is an informational alert with helpful details.');
+  };
+
+  const showConfirmationDemo = () => {
+    showConfirmationAlert(
+      'Delete Item?',
+      'Are you sure you want to delete this item? This action cannot be undone.',
+      () => showSuccessAlert('Deleted', 'Item has been successfully deleted.'),
+      () => showInfoAlert('Cancelled', 'Deletion was cancelled.'),
+      'Delete',
+      'Cancel',
+      'warning'
+    );
+  };
+  const showDestructiveDemo = () => {
+    showDestructiveAlert(
+      'Clear All Data?',
+      'This will permanently delete all your financial data. This action cannot be undone.',
+      () => showSuccessAlert('Cleared', 'All data has been cleared.'),
+      () => showInfoAlert('Safe', 'Your data is safe. Action was cancelled.'),
+      'Clear All',
+      'Keep Data'
+    );
+  };
+
+  const showThreeButtonDemo = () => {
+    showThreeButtonAlert(
+      'Choose Action',
+      'What would you like to do with this transaction? You can edit, duplicate, or cancel.',
+      () => showSuccessAlert('Edit', 'Transaction will be edited.'),
+      () => showSuccessAlert('Duplicate', 'Transaction will be duplicated.'),
+      () => showInfoAlert('Cancelled', 'No action was taken.'),
+      'Edit',
+      'Duplicate',
+      'Cancel',
+      'info'
+    );
   };
 
   const toggleSetting = async (key) => {
@@ -276,6 +332,7 @@ const NotificationScreen = ({ navigation }) => {
             </View>
           </Card>        )}        {/* Test Section - For Development */}
         <Card style={styles.actionsCard}>
+          <Text style={[styles.sectionTitle, { marginBottom: 16, textAlign: 'center' }]}>Notification Tests</Text>
           <View style={styles.actionsContainer}>
             <TouchableOpacity style={styles.actionButton} onPress={createTestNotificationHandler}>
               <Ionicons name="flask" size={16} color={colors.primary.main} />
@@ -286,6 +343,50 @@ const NotificationScreen = ({ navigation }) => {
             <TouchableOpacity style={[styles.actionButton, { backgroundColor: '#fff3cd' }]} onPress={sendDirectNotificationHandler}>
               <Ionicons name="notifications" size={16} color="#856404" />
               <Text style={[styles.actionText, { color: '#856404' }]}>Send Direct Notification</Text>
+            </TouchableOpacity>
+          </View>
+        </Card>
+
+        {/* Alert Style Demo Section */}
+        <Card style={styles.actionsCard}>
+          <Text style={[styles.sectionTitle, { marginBottom: 16, textAlign: 'center' }]}>Alert Style Demo</Text>
+          <View style={styles.alertDemoGrid}>
+            <TouchableOpacity style={[styles.demoButton, styles.successDemo]} onPress={showSuccessDemo}>
+              <Ionicons name="checkmark-circle" size={16} color="#10b981" />
+              <Text style={[styles.demoText, { color: '#10b981' }]}>Success</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={[styles.demoButton, styles.warningDemo]} onPress={showWarningDemo}>
+              <Ionicons name="warning" size={16} color="#f59e0b" />
+              <Text style={[styles.demoText, { color: '#f59e0b' }]}>Warning</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={[styles.demoButton, styles.errorDemo]} onPress={showErrorDemo}>
+              <Ionicons name="close-circle" size={16} color="#ef4444" />
+              <Text style={[styles.demoText, { color: '#ef4444' }]}>Error</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={[styles.demoButton, styles.infoDemo]} onPress={showInfoDemo}>
+              <Ionicons name="information-circle" size={16} color="#3b82f6" />
+              <Text style={[styles.demoText, { color: '#3b82f6' }]}>Info</Text>
+            </TouchableOpacity>
+          </View>
+            <View style={[styles.actionsContainer, { marginTop: 16 }]}>
+            <TouchableOpacity style={[styles.actionButton, { backgroundColor: '#fef3c7', marginRight: 8 }]} onPress={showConfirmationDemo}>
+              <Ionicons name="help-circle" size={16} color="#d97706" />
+              <Text style={[styles.actionText, { color: '#d97706' }]}>Confirmation</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={[styles.actionButton, { backgroundColor: '#fecaca' }]} onPress={showDestructiveDemo}>
+              <Ionicons name="trash" size={16} color="#dc2626" />
+              <Text style={[styles.actionText, { color: '#dc2626' }]}>Destructive</Text>
+            </TouchableOpacity>
+          </View>
+          
+          <View style={[styles.actionsContainer, { marginTop: 12 }]}>
+            <TouchableOpacity style={[styles.actionButton, { backgroundColor: '#e0f2fe' }]} onPress={showThreeButtonDemo}>
+              <Ionicons name="options" size={16} color="#0891b2" />
+              <Text style={[styles.actionText, { color: '#0891b2' }]}>3 Buttons Layout</Text>
             </TouchableOpacity>
           </View>
         </Card>
@@ -511,13 +612,12 @@ const styles = StyleSheet.create({  container: {
     paddingVertical: 12,
     backgroundColor: '#eff6ff',
     borderRadius: 25,
-  },
-  actionText: {
+  },  actionText: {
     marginLeft: 8,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: '#1d4ed8',
-  },  notificationsContainer: {
+  },notificationsContainer: {
     marginHorizontal: 20,
     marginBottom: 24,
   },
@@ -644,11 +744,45 @@ const styles = StyleSheet.create({  container: {
     fontSize: 15,
     color: '#64748b',
     lineHeight: 20,
-  },
-  settingDivider: {
+  },  settingDivider: {
     height: 1,
     backgroundColor: '#f1f5f9',
     marginHorizontal: 20,
+  },
+  alertDemoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },  demoButton: {
+    width: '48%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    marginBottom: 8,
+    borderWidth: 1,
+  },
+  successDemo: {
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    borderColor: '#10b981',
+  },
+  warningDemo: {
+    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    borderColor: '#f59e0b',
+  },
+  errorDemo: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderColor: '#ef4444',
+  },
+  infoDemo: {
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    borderColor: '#3b82f6',
+  },  demoText: {
+    marginLeft: 6,
+    fontSize: 12,
+    fontWeight: '600',
   },
 });
 
