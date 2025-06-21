@@ -243,13 +243,20 @@ const fallbackCategories = [
       ]
     );
   };
-
   const resetForm = () => {
     setNewBudgetCategory('');
     setNewBudgetAmount('');
     setEditingBudget(null);
     setShowAddBudget(false);
-  };  const getExpenseCategories = () => {
+  };
+
+  const handleViewSpending = (budget, category) => {
+    // Navigate to TransactionHistory with category and time filter
+    navigation.navigate('Transactions', {
+      categoryFilter: category.name,
+      timeFilter: '1month' // Last month filter
+    });
+  };const getExpenseCategories = () => {
     return categories.filter(cat => cat.type === 'expense');
   };  const getTotalBudgetOverview = () => {
     // If we have budget summary data, use it for consistency
@@ -560,8 +567,14 @@ const fallbackCategories = [
                         <Text style={styles.budgetAmount}>
                           ₹{progress.spent.toFixed(2)} of ₹{budget.amount.toFixed(2)}
                         </Text>
-                      </View>                    </View>
-                    <View style={styles.budgetActions}>
+                      </View>                    </View>                    <View style={styles.budgetActions}>
+                      <TouchableOpacity 
+                        style={styles.viewButton} 
+                        onPress={() => handleViewSpending(budget, category)}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="list-outline" size={18} color={colors.info.main} />
+                      </TouchableOpacity>
                       <TouchableOpacity 
                         style={styles.editButton} 
                         onPress={() => handleEditBudget(budget)}
@@ -626,7 +639,6 @@ const fallbackCategories = [
                       </View>
                     </View>
                   </View>
-                
                   {progress.isOverBudget && (
                     <View style={styles.warningContainer}>
                       <View style={styles.warningContent}>
@@ -635,7 +647,11 @@ const fallbackCategories = [
                           You've exceeded your budget for this category
                         </Text>
                       </View>
-                      <TouchableOpacity style={styles.warningActionButton}>
+                      <TouchableOpacity 
+                        style={styles.warningActionButton}
+                        onPress={() => handleViewSpending(budget, category)}
+                        activeOpacity={0.7}
+                      >
                         <Text style={styles.warningActionText}>View Spending</Text>
                         <Ionicons name="chevron-forward" size={14} color={colors.danger.main} />
                       </TouchableOpacity>
@@ -1292,16 +1308,20 @@ const styles = StyleSheet.create({
   },
   bottomSpacer: {
     height: 36,
-  },
-  budgetActions: {
+  },  budgetActions: {
     flexDirection: 'row',
     gap: 8,
+  },
+  viewButton: {
+    padding: 8,
+    borderRadius: 10,
+    backgroundColor: '#f0f9ff',
   },
   editButton: {
     padding: 8,
     borderRadius: 10,
     backgroundColor: '#eff6ff',
-  },  deleteButton: {
+  },deleteButton: {
     padding: 8,
     borderRadius: 10,
     backgroundColor: '#fef2f2',

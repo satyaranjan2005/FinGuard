@@ -45,7 +45,7 @@ const shadeColor = (color, percent) => {
   return "#" + RR + GG + BB;
 };
 
-const TransactionHistory = ({ navigation }) => {
+const TransactionHistory = ({ navigation, route }) => {
   const [transactions, setTransactions] = useState([]);
   const [filteredTransactions, setFilteredTransactions] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -55,10 +55,22 @@ const TransactionHistory = ({ navigation }) => {
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [categories, setCategories] = useState([]);
   const [selectedTimeFilter, setSelectedTimeFilter] = useState('all');
-  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('all');
-  useEffect(() => {
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('all');  useEffect(() => {
     loadTransactions();
   }, []);
+
+  // Handle route parameters for initial filtering (e.g., from BudgetScreen)
+  useEffect(() => {
+    if (route?.params) {
+      const { categoryFilter, timeFilter } = route.params;
+      if (categoryFilter) {
+        setSelectedCategoryFilter(categoryFilter);
+      }
+      if (timeFilter) {
+        setSelectedTimeFilter(timeFilter);
+      }
+    }
+  }, [route?.params]);
 
   useEffect(() => {
     applyFilters(transactions);
