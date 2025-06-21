@@ -2,6 +2,7 @@
 // This file handles all data operations like fetching user data, transactions, and budget information
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { emitEvent, EVENTS } from '../utils/eventEmitter';
 
 // Helper function to get category colors
 const getCategoryColor = (category) => {
@@ -667,13 +668,77 @@ export const fetchRecentTransactions = async (limit = 10) => {
  */
 export const fetchBudgetSummary = async () => {
   try {
-    await delay(600);
+    // Remove delay for immediate response
+    console.log('Fetching budget summary...');
     
-    const storedBudget = await AsyncStorage.getItem('budgetData');
-    return storedBudget ? JSON.parse(storedBudget) : SAMPLE_BUDGET_DATA;
+    // First check if there are any actual budgets created by the user
+    const storedBudgets = await AsyncStorage.getItem('budgets');
+    const budgetsList = storedBudgets ? JSON.parse(storedBudgets) : [];
+    
+    if (budgetsList.length === 0) {
+      // If no budgets exist, return null
+      console.log('No budgets found, returning null');
+      return null;
+    }
+    
+    // Always recalculate the summary to ensure it's up-to-date
+    console.log(`Found ${budgetsList.length} budgets, calculating summary...`);
+    
+    // Get all categories to get category names and colors
+    const storedCategories = await AsyncStorage.getItem('categories');
+    const categories = storedCategories ? JSON.parse(storedCategories) : [];
+    
+    // Get all transactions to calculate spent amounts accurately
+    const storedTransactions = await AsyncStorage.getItem('transactions');
+    const transactions = storedTransactions ? JSON.parse(storedTransactions) : [];
+    const expenseTransactions = transactions.filter(t => t.type === 'expense');
+    
+    // Calculate totals from all budgets
+    const totalAllocated = budgetsList.reduce((sum, budget) => sum + (parseFloat(budget.amount) || 0), 0);
+    
+    // Create category summary data with correct category names and colors
+    const categorySummaries = budgetsList.map(budget => {
+      // Find matching category for this budget
+      const category = categories.find(cat => cat.id === budget.categoryId) || {};
+      
+      // Calculate actual spent amount from transactions
+      const spent = expenseTransactions
+        .filter(t => t.categoryId === budget.categoryId)
+        .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+      
+      // Update the budget's spent value
+      budget.spent = spent;
+      
+      return {
+        name: category.name || 'Unknown',
+        allocated: parseFloat(budget.amount) || 0,
+        spent: spent,
+        color: category.color || '#4F8EF7',
+        icon: category.icon || 'wallet',
+        categoryId: budget.categoryId
+      };
+    });
+    
+    // Calculate total spent from category summaries
+    const totalSpent = categorySummaries.reduce((sum, cat) => sum + cat.spent, 0);
+    
+    // Update the budgets in storage with recalculated spent values
+    await AsyncStorage.setItem('budgets', JSON.stringify(budgetsList));
+    
+    const budgetSummary = {
+      total: totalAllocated,
+      spent: totalSpent,
+      categories: categorySummaries,
+      lastUpdated: new Date().toISOString()
+    };
+    
+    // Store this summary for future use
+    await AsyncStorage.setItem('budgetData', JSON.stringify(budgetSummary));
+    console.log('Budget summary calculated and stored');
+    return budgetSummary;
   } catch (error) {
     console.error('Error fetching budget summary:', error);
-    return SAMPLE_BUDGET_DATA;
+    return null;
   }
 };
 
@@ -770,13 +835,24 @@ export const saveTransaction = async (transaction) => {
       date: transaction.date || new Date().toISOString(),
       createdAt: transaction.createdAt || new Date().toISOString()
     };
-    
-    // Save updated transactions array (newest first)
+      // Save updated transactions array (newest first)
     const updatedTransactions = [newTransaction, ...transactions];
-    await AsyncStorage.setItem('transactions', JSON.stringify(updatedTransactions));
+    await AsyncStorage.setItem('transactions', JSON.stringify(updatedTransactions));    // Update balance data
+    const userData = await updateBalanceFromTransaction(newTransaction);
     
-    // Update balance data
-    await updateBalanceFromTransaction(newTransaction);
+    // Update budget data when it's an expense
+    if (newTransaction.type === 'expense' && newTransaction.categoryId) {
+      await updateBudgetFromTransaction(newTransaction);
+    }
+    
+    // Update budget summary only once at the end
+    await updateBudgetSummary();
+    
+    // Emit event for transaction added
+    emitEvent(EVENTS.TRANSACTION_ADDED, newTransaction);
+    
+    // Emit balance changed event
+    emitEvent(EVENTS.BALANCE_CHANGED, { newBalance: userData.balance });
     
     return newTransaction;
   } catch (error) {
@@ -810,11 +886,37 @@ export const updateTransaction = async (transactionId, updatedTransaction) => {
     };
     
     await AsyncStorage.setItem('transactions', JSON.stringify(transactions));
-    
-    // Update balance if amount or type changed
+      // Update balance if amount or type changed
     if (oldTransaction.amount !== updatedTransaction.amount || oldTransaction.type !== updatedTransaction.type) {
       await updateBalanceFromTransaction(transactions[transactionIndex], oldTransaction);
     }
+    
+    // Update budget if it's an expense transaction and amount, category, or type changed
+    const newTransaction = transactions[transactionIndex];
+    if ((oldTransaction.type === 'expense' || newTransaction.type === 'expense') && 
+        (oldTransaction.amount !== newTransaction.amount || 
+         oldTransaction.categoryId !== newTransaction.categoryId || 
+         oldTransaction.type !== newTransaction.type)) {
+      
+      // If old transaction was expense, reverse it from budget
+      if (oldTransaction.type === 'expense') {
+        // Create an inverse transaction to subtract the old amount
+        const reverseTransaction = {
+          ...oldTransaction,
+          amount: -oldTransaction.amount // Negative to reverse
+        };
+        await updateBudgetFromTransaction(reverseTransaction);
+      }
+      
+      // If new transaction is expense, add it to budget
+      if (newTransaction.type === 'expense') {
+        await updateBudgetFromTransaction(newTransaction);
+      }
+    }    // Emit event for transaction update
+    emitEvent(EVENTS.TRANSACTION_UPDATED, { 
+      transaction: transactions[transactionIndex],
+      oldTransaction
+    });
     
     return transactions[transactionIndex];
   } catch (error) {
@@ -849,6 +951,25 @@ export const deleteTransaction = async (transactionId) => {
       type: deletedTransaction.type === 'income' ? 'expense' : 'income'
     };
     await updateBalanceFromTransaction(reverseTransaction);
+      // If the deleted transaction was an expense, update the budget
+    if (deletedTransaction.type === 'expense' && deletedTransaction.categoryId) {
+      // Create a negative transaction to subtract from the budget
+      const reverseBudgetTransaction = {
+        ...deletedTransaction,
+        amount: -deletedTransaction.amount // Negative amount to reduce budget spending
+      };
+      await updateBudgetFromTransaction(reverseBudgetTransaction);
+      console.log(`Budget updated after deleting expense transaction with categoryId: ${deletedTransaction.categoryId}`);
+    }
+    
+    // Update the budget summary
+    await updateBudgetSummary();
+    
+    // Emit event for transaction deletion
+    emitEvent(EVENTS.TRANSACTION_DELETED, { 
+      transactionId, 
+      transaction: deletedTransaction
+    });
     
     return true;
   } catch (error) {
@@ -888,14 +1009,147 @@ const updateBalanceFromTransaction = async (transaction) => {
         userData.balance = 0;
       }
     }
-    
-    // Save updated user data
+      // Save updated user data
     await AsyncStorage.setItem('userData', JSON.stringify(userData));
     
     console.log(`Balance updated: ${transaction.type} of ₹${transaction.amount}, New balance: ₹${userData.balance}`);
+    
+    return userData;
   } catch (error) {
     console.error('Error updating balance:', error);
     throw error; // Re-throw to handle in calling function
+  }
+};
+
+/**
+ * Update budget data based on a new transaction
+ * @param {Object} transaction - The transaction to factor into budget calculations
+ * @returns {Promise<void>}
+ */
+// Export this function so it can be called from other parts of the app if needed
+export const updateBudgetFromTransaction = async (transaction) => {
+  try {
+    if (transaction.type !== 'expense') {
+      return; // Only expenses affect budget spending
+    }
+    
+    const amount = parseFloat(transaction.amount) || 0;
+    if (amount === 0) {
+      return; // Ignore zero amounts (but allow negative for reversals)
+    }
+    
+    // Get current budgets
+    const storedBudgets = await AsyncStorage.getItem('budgets');
+    const budgets = storedBudgets ? JSON.parse(storedBudgets) : [];
+    
+    if (budgets.length === 0) {
+      return; // No budgets to update
+    }
+    
+    // Find the budget that matches this transaction's category by categoryId
+    const matchingBudget = budgets.find(budget => 
+      budget.categoryId === transaction.categoryId
+    );
+      // If we found a matching budget, update its spent amount
+    if (matchingBudget) {
+      // For adding or subtracting from budget spent amount
+      matchingBudget.spent = (parseFloat(matchingBudget.spent) || 0) + amount;
+      
+      // Make sure spent doesn't go below zero
+      if (matchingBudget.spent < 0) {
+        matchingBudget.spent = 0;
+      }
+      
+      await AsyncStorage.setItem('budgets', JSON.stringify(budgets));
+      
+      console.log(`Budget updated for category ${matchingBudget.categoryId}: spent ${matchingBudget.spent}`);
+    } else {
+      console.log(`No matching budget found for transaction with categoryId: ${transaction.categoryId}`);
+    }
+  } catch (error) {
+    console.error('Error updating budget from transaction:', error);
+  }
+};
+
+/**
+ * Recalculate and update the overall budget summary
+ * @returns {Promise<void>}
+ */
+// Export this function so it can be called from other parts of the app if needed
+export const updateBudgetSummary = async () => {
+  try {
+    console.log('Starting budget summary update...');
+    const storedBudgets = await AsyncStorage.getItem('budgets');
+    const budgets = storedBudgets ? JSON.parse(storedBudgets) : [];
+      if (budgets.length === 0) {
+      // If no budgets, clear the budget summary
+      await AsyncStorage.removeItem('budgetData');
+      console.log('No budgets found, removed budgetData from storage');
+      
+      // Broadcast that budget data was cleared
+      emitEvent(EVENTS.BUDGET_UPDATED, { cleared: true });
+      
+      return;
+    }
+    
+    // Get all categories to get category names and colors
+    const storedCategories = await AsyncStorage.getItem('categories');
+    const categories = storedCategories ? JSON.parse(storedCategories) : [];
+    
+    // Calculate totals from all budgets
+    const totalAllocated = budgets.reduce((sum, budget) => sum + (parseFloat(budget.amount) || 0), 0);
+    const totalSpent = budgets.reduce((sum, budget) => sum + (parseFloat(budget.spent) || 0), 0);
+    
+    console.log(`Budget summary: Total allocated: ${totalAllocated}, Total spent: ${totalSpent}`);
+    
+    // Also get expense transactions to recalculate spent amounts if needed
+    const storedTransactions = await AsyncStorage.getItem('transactions');
+    const transactions = storedTransactions ? JSON.parse(storedTransactions) : [];
+    const expenseTransactions = transactions.filter(t => t.type === 'expense');
+    
+    // Create category summary data with correct category names and colors
+    const categorySummaries = budgets.map(budget => {
+      // Find matching category for this budget
+      const category = categories.find(cat => cat.id === budget.categoryId) || {};
+      
+      // Calculate actual spent amount from transactions
+      const spent = expenseTransactions
+        .filter(t => t.categoryId === budget.categoryId)
+        .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+      
+      // Update the budget spent value to match actual transactions
+      budget.spent = spent;
+      
+      return {
+        name: category.name || 'Unknown',
+        allocated: parseFloat(budget.amount) || 0,
+        spent: spent,
+        color: category.color || '#4F8EF7',
+        icon: category.icon || 'wallet',
+        categoryId: budget.categoryId
+      };
+    });
+    
+    // Also update the budgets in storage with recalculated spent values
+    await AsyncStorage.setItem('budgets', JSON.stringify(budgets));
+    
+    // Create the budget summary object
+    const budgetSummary = {
+      total: totalAllocated,
+      spent: totalSpent,
+      categories: categorySummaries,
+      lastUpdated: new Date().toISOString()
+    };    // Save the updated budget summary
+    await AsyncStorage.setItem('budgetData', JSON.stringify(budgetSummary));
+    
+    // Broadcast that the budget was updated
+    emitEvent(EVENTS.BUDGET_UPDATED, { 
+      updated: true,
+      summary: budgetSummary
+    });
+    console.log('Budget summary updated and event emitted');
+  } catch (error) {
+    console.error('Error updating budget summary:', error);
   }
 };
 
@@ -927,7 +1181,7 @@ export const getExpenseSummaryData = async () => {
  */
 export const fetchCategories = async (type = null) => {
   try {
-    await delay(300); // Simulate API delay
+    // Remove delay for immediate response
     
     // Try to get categories from AsyncStorage first
     const storedCategories = await AsyncStorage.getItem('categories');
@@ -1035,11 +1289,20 @@ export const saveBudget = async (budget) => {
     const currentMonth = new Date().getMonth();
     const currentYear = new Date().getFullYear();
     
+    // Find the category to get its name
+    const storedCategories = await AsyncStorage.getItem('categories');
+    const categories = storedCategories ? JSON.parse(storedCategories) : [];
+    const category = categories.find(c => c.id === budget.categoryId) || {};
+    
+    // Set budget fields
     const newBudget = {
       ...budget,
       id: budget.id || `budget${Date.now()}`,
+      category: category.name || 'Unknown', // Store the category name for easier reference
+      color: category.color, // Store color for visualization
       month: currentMonth,
       year: currentYear,
+      spent: budget.spent || 0, // Initialize spent as 0 if not provided
       createdAt: budget.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -1052,6 +1315,10 @@ export const saveBudget = async (budget) => {
     }
     
     await AsyncStorage.setItem('budgets', JSON.stringify(budgets));
+    
+    // Update budget summary data after adding/updating a budget
+    await updateBudgetSummary();
+    
     return newBudget;
   } catch (error) {
     console.error('Error saving budget:', error);
@@ -1065,6 +1332,7 @@ export const saveBudget = async (budget) => {
  */
 export const fetchBudgets = async () => {
   try {
+    // Direct fetch without delay for better performance
     const storedBudgets = await AsyncStorage.getItem('budgets');
     return storedBudgets ? JSON.parse(storedBudgets) : [];
   } catch (error) {
@@ -1084,9 +1352,59 @@ export const deleteBudget = async (budgetId) => {
     const filteredBudgets = budgets.filter(b => b.id !== budgetId);
     
     await AsyncStorage.setItem('budgets', JSON.stringify(filteredBudgets));
+    
+    // Update budget summary data after deleting a budget
+    await updateBudgetSummary();
+    
     return true;
   } catch (error) {
     console.error('Error deleting budget:', error);
+    throw error;
+  }
+};
+
+/**
+ * Update a budget
+ * @param {string} budgetId - ID of budget to update
+ * @param {Object} updates - Fields to update
+ * @returns {Promise<Object>} Updated budget
+ */
+export const updateBudget = async (budgetId, updates) => {
+  try {
+    const budgets = await fetchBudgets();
+    const budgetIndex = budgets.findIndex(b => b.id === budgetId);
+    
+    if (budgetIndex === -1) {
+      throw new Error(`Budget with ID ${budgetId} not found`);
+    }
+    
+    // If categoryId is changed, get the updated category information
+    if (updates.categoryId && updates.categoryId !== budgets[budgetIndex].categoryId) {
+      const storedCategories = await AsyncStorage.getItem('categories');
+      const categories = storedCategories ? JSON.parse(storedCategories) : [];
+      const category = categories.find(c => c.id === updates.categoryId);
+      
+      if (category) {
+        updates.category = category.name || 'Unknown';
+        updates.color = category.color;
+      }
+    }
+    
+    // Update the budget
+    budgets[budgetIndex] = {
+      ...budgets[budgetIndex],
+      ...updates,
+      updatedAt: new Date().toISOString()
+    };
+    
+    await AsyncStorage.setItem('budgets', JSON.stringify(budgets));
+    
+    // Update budget summary data
+    await updateBudgetSummary();
+    
+    return budgets[budgetIndex];
+  } catch (error) {
+    console.error('Error updating budget:', error);
     throw error;
   }
 };

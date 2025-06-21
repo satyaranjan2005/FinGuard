@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Alert, StyleSheet, Dimensions, ActivityIndicator, StatusBar, Modal, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,91 +7,154 @@ import { ProgressChart } from 'react-native-chart-kit';
 import { useFocusEffect } from '@react-navigation/native';
 import { Button, Card, Input } from '../components';
 import { storageService } from '../services/storageService';
-import { fetchCategories, saveBudget, fetchBudgets, deleteBudget as deleteBudgetFromService, updateBudget, initializeAppData } from '../services/dataService';
+import { fetchCategories, saveBudget, fetchBudgets, deleteBudget as deleteBudgetFromService, updateBudget, initializeAppData, fetchBudgetSummary } from '../services/dataService';
 import colors from '../utils/colors';
+import { addEventListener, removeEventListener, EVENTS } from '../utils/eventEmitter';
 
-const BudgetScreen = ({ navigation }) => {
-  const [budgets, setBudgets] = useState([]);
+const BudgetScreen = ({ navigation }) => {  const [budgets, setBudgets] = useState([]);
   const [categories, setCategories] = useState([]);
   const [transactions, setTransactions] = useState([]);
+  const [budgetSummary, setBudgetSummary] = useState(null);
   const [showAddBudget, setShowAddBudget] = useState(false);
   const [editingBudget, setEditingBudget] = useState(null);
   const [newBudgetCategory, setNewBudgetCategory] = useState('');
-  const [newBudgetAmount, setNewBudgetAmount] = useState('');  const [loading, setLoading] = useState(true);
+  const [newBudgetAmount, setNewBudgetAmount] = useState('');
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
-
-  // Fallback categories in case data loading fails
-  const fallbackCategories = [
-    { id: 'cat1', name: 'Food', type: 'expense', color: '#10b981', icon: 'restaurant' },
-    { id: 'cat2', name: 'Transportation', type: 'expense', color: '#8b5cf6', icon: 'car' },
-    { id: 'cat3', name: 'Shopping', type: 'expense', color: '#84cc16', icon: 'bag' },
-    { id: 'cat4', name: 'Entertainment', type: 'expense', color: '#ef4444', icon: 'film' },
-    { id: 'cat5', name: 'Healthcare', type: 'expense', color: '#06b6d4', icon: 'medical' },
-    { id: 'cat6', name: 'Utilities', type: 'expense', color: '#f59e0b', icon: 'flash' },
-    { id: 'cat7', name: 'Housing', type: 'expense', color: '#3b82f6', icon: 'home' }
-  ];
-  useEffect(() => {
+  
+  // Use ref for tracking load time to avoid dependency issues
+  const lastLoadTimeRef = useRef(null);
+  const isLoadingRef = useRef(false);
+  // Fallback categories in case data loading fails - moved outside component to prevent recreation
+const fallbackCategories = [
+  { id: 'cat1', name: 'Food', type: 'expense', color: '#10b981', icon: 'restaurant' },
+  { id: 'cat2', name: 'Transportation', type: 'expense', color: '#8b5cf6', icon: 'car' },
+  { id: 'cat3', name: 'Shopping', type: 'expense', color: '#84cc16', icon: 'bag' },
+  { id: 'cat4', name: 'Entertainment', type: 'expense', color: '#ef4444', icon: 'film' },
+  { id: 'cat5', name: 'Healthcare', type: 'expense', color: '#06b6d4', icon: 'medical' },
+  { id: 'cat6', name: 'Utilities', type: 'expense', color: '#f59e0b', icon: 'flash' },
+  { id: 'cat7', name: 'Housing', type: 'expense', color: '#3b82f6', icon: 'home' }
+];  useEffect(() => {
     loadData();
-  }, []);
-
+    
+    // Listen to budget updates and transaction changes with throttling
+    const budgetUpdateSubscription = addEventListener(EVENTS.BUDGET_UPDATED, () => {
+      console.log("Budget updated event received in BudgetScreen");
+      loadData();
+    });
+    
+    const transactionAddedSubscription = addEventListener(EVENTS.TRANSACTION_ADDED, () => {
+      console.log("Transaction added event received in BudgetScreen");
+      loadData();
+    });
+    
+    const transactionDeletedSubscription = addEventListener(EVENTS.TRANSACTION_DELETED, () => {
+      console.log("Transaction deleted event received in BudgetScreen");
+      loadData();
+    });
+    
+    // Clean up subscriptions
+    return () => {
+      removeEventListener(budgetUpdateSubscription);
+      removeEventListener(transactionAddedSubscription);
+      removeEventListener(transactionDeletedSubscription);
+    };
+  }, []); // Empty dependency array since loadData is wrapped in useCallback  // Refresh data when screen comes into focus - optimized to prevent excessive reloads
   useFocusEffect(
     React.useCallback(() => {
-      loadData();
-    }, [])  );  const loadData = async () => {
+      console.log('BudgetScreen: Focus effect triggered - checking if reload needed');
+      // Only reload if screen has been away for a meaningful amount of time
+      // This prevents reloads when navigating back from quick modal interactions
+      const shouldReload = !isLoadingRef.current && (!lastLoadTimeRef.current || Date.now() - lastLoadTimeRef.current > 5000); // 5 second threshold
+      if (shouldReload) {
+        console.log('BudgetScreen: Reloading data due to focus effect');
+        loadData();
+      }
+    }, [loadData]) // Include loadData dependency since it's stable
+  );// Load data function - wrapped in useCallback with debouncing to prevent excessive calls
+  const loadData = React.useCallback(async () => {
+    // Prevent rapid successive calls
+    const now = Date.now();
+    if (isLoadingRef.current || (lastLoadTimeRef.current && now - lastLoadTimeRef.current < 1000)) { // 1 second debounce
+      console.log('BudgetScreen: Skipping load data due to recent call or ongoing load');
+      return;
+    }
+    
+    isLoadingRef.current = true;
     setLoading(true);
+    lastLoadTimeRef.current = now;
+    
     try {
-      // Initialize app data if needed (ensures sample categories exist)
-      await initializeAppData();
+      console.log('BudgetScreen: Loading budget data...');
       
-      const [budgetsData, categoriesData, transactionsData] = await Promise.all([
+      // Load data in parallel for faster performance
+      const [budgetsData, categoriesData, transactionsData, budgetSummaryData] = await Promise.all([
         fetchBudgets(),
         fetchCategories(), // Load all categories, then filter in getExpenseCategories
-        storageService.getTransactions(),      ]);
+        storageService.getTransactions(),
+        fetchBudgetSummary(),
+      ]);
+      
+      console.log(`BudgetScreen: Loaded ${budgetsData?.length || 0} budgets, ${categoriesData?.length || 0} categories, ${transactionsData?.length || 0} transactions`);
       
       setBudgets(Array.isArray(budgetsData) ? budgetsData : []);
+      setBudgetSummary(budgetSummaryData);
       
       // Use fallback categories if none loaded
       const finalCategories = Array.isArray(categoriesData) && categoriesData.length > 0 
         ? categoriesData 
         : fallbackCategories;
       setCategories(finalCategories);
-      
       setTransactions(Array.isArray(transactionsData) ? transactionsData : []);
     } catch (error) {
       console.error('Load budget data error:', error);
       Alert.alert('Error', 'Failed to load budget data');
       setBudgets([]);
+      setBudgetSummary(null);
       setCategories(fallbackCategories); // Use fallback on error
       setTransactions([]);
-    }finally {
+    } finally {
+      isLoadingRef.current = false;
       setLoading(false);
     }
-  };
-
+  }, []); // Empty dependency array since we're using refs
   const handleRefresh = async () => {
+    console.log('BudgetScreen: Manual refresh triggered');
     setRefreshing(true);
     await loadData();
     setRefreshing(false);
   };
-
   const getCurrentMonthSpending = (categoryId) => {
     const currentMonth = new Date().getMonth();
     const currentYear = new Date().getFullYear();
     
     return transactions
       .filter(transaction => {
-        const transactionDate = new Date(transaction.createdAt);
+        const transactionDate = new Date(transaction.date || transaction.createdAt);
         return transactionDate.getMonth() === currentMonth &&
                transactionDate.getFullYear() === currentYear &&
                transaction.type === 'expense' &&
                transaction.categoryId === categoryId;
       })
       .reduce((sum, transaction) => sum + parseFloat(transaction.amount), 0);
-  };
-
-  const getBudgetProgress = (budget) => {
-    const spent = getCurrentMonthSpending(budget.categoryId);
+  };  const getBudgetProgress = (budget) => {
+    // First try to get spent amount from budget summary data for accuracy
+    let spent = budget.spent !== undefined ? budget.spent : 0;
+    
+    // If budget summary is available, use the data from there
+    if (budgetSummary && budgetSummary.categories) {
+      const summaryCategory = budgetSummary.categories.find(cat => cat.categoryId === budget.categoryId);
+      if (summaryCategory) {
+        spent = summaryCategory.spent;
+      }
+    }
+    
+    // Fallback to calculating from transactions if no stored value
+    if (spent === 0 && budget.spent === undefined) {
+      spent = getCurrentMonthSpending(budget.categoryId);
+    }
+    
     const progress = budget.amount > 0 ? spent / budget.amount : 0;
     return {
       spent,
@@ -99,7 +162,7 @@ const BudgetScreen = ({ navigation }) => {
       remaining: Math.max(budget.amount - spent, 0),
       isOverBudget: spent > budget.amount
     };
-  };  const addBudget = async () => {
+  };const addBudget = async () => {
     if (!newBudgetCategory || !newBudgetAmount || parseFloat(newBudgetAmount) <= 0) {
       Alert.alert('Validation Error', 'Please select a category and enter a valid amount greater than 0');
       return;
@@ -144,9 +207,8 @@ const BudgetScreen = ({ navigation }) => {
         });
         Alert.alert('Success', 'Budget created successfully!');
       }
-      
-      resetForm();
-      loadData();
+        resetForm();
+      // Don't call loadData() here as BUDGET_UPDATED event will handle it
     } catch (error) {
       console.error('Save budget error:', error);
       Alert.alert('Error', error.message || (editingBudget ? 'Failed to update budget' : 'Failed to create budget'));
@@ -169,11 +231,10 @@ const BudgetScreen = ({ navigation }) => {
         { 
           text: 'Delete', 
           style: 'destructive',
-          onPress: async () => {
-            try {
+          onPress: async () => {            try {
               await deleteBudgetFromService(budgetId);
               Alert.alert('Success', 'Budget deleted successfully');
-              loadData();
+              // Don't call loadData() here as BUDGET_UPDATED event will handle it
             } catch (error) {
               Alert.alert('Error', 'Failed to delete budget');
             }
@@ -190,15 +251,26 @@ const BudgetScreen = ({ navigation }) => {
     setShowAddBudget(false);
   };  const getExpenseCategories = () => {
     return categories.filter(cat => cat.type === 'expense');
-  };
-
-  const getTotalBudgetOverview = () => {
+  };  const getTotalBudgetOverview = () => {
+    // If we have budget summary data, use it for consistency
+    if (budgetSummary && budgetSummary.total !== undefined) {
+      return {
+        totalBudget: budgetSummary.total,
+        totalSpent: budgetSummary.spent,
+        totalRemaining: budgetSummary.total - budgetSummary.spent,
+        overallProgress: budgetSummary.total > 0 ? budgetSummary.spent / budgetSummary.total : 0
+      };
+    }
+    
+    // Fallback to calculating from individual budgets
     let totalBudget = 0;
     let totalSpent = 0;
     
     budgets.forEach(budget => {
       totalBudget += budget.amount;
-      totalSpent += getCurrentMonthSpending(budget.categoryId);
+      // Use the budget's stored spent value if available, otherwise calculate from transactions
+      const spent = budget.spent !== undefined ? budget.spent : getCurrentMonthSpending(budget.categoryId);
+      totalSpent += spent;
     });
 
     return {
@@ -227,6 +299,12 @@ const BudgetScreen = ({ navigation }) => {
           </View>          <View style={styles.headerRight}>
             <TouchableOpacity 
               style={styles.headerButton}
+              onPress={handleRefresh}
+            >
+              <Ionicons name="refresh-outline" size={20} color="white" />
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.headerButton}
               onPress={() => navigation.navigate('Notifications')}
             >
               <Ionicons name="notifications-outline" size={20} color="white" />
@@ -237,7 +315,7 @@ const BudgetScreen = ({ navigation }) => {
             >
               <Ionicons name="settings-outline" size={20} color="white" />
             </TouchableOpacity>
-          </View>        </View>
+          </View></View>
         <Text style={styles.headerSubtitle}>{currentMonth}</Text>
       </LinearGradient>
 

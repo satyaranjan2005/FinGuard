@@ -8,6 +8,7 @@ import RNPickerSelect from 'react-native-picker-select';
 import { Button, Card, Input } from '../components';
 import { storageService } from '../services/storageService';
 import { fetchCategories, saveTransaction, updateTransaction, getCurrentBalance, validateTransaction } from '../services/dataService';
+import { addEventListener, removeEventListener, EVENTS, emitEvent } from '../utils/eventEmitter';
 
 const AddTransactionScreen = ({ navigation, route }) => {
   const { transaction: editTransaction } = route?.params || {};
@@ -45,10 +46,20 @@ const AddTransactionScreen = ({ navigation, route }) => {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
   const [currentBalance, setCurrentBalance] = useState(0);
-  
-  useEffect(() => {
+    useEffect(() => {
     loadCategories();
     loadCurrentBalance();
+    
+    // Listen for balance changes
+    const balanceSubscription = addEventListener(EVENTS.BALANCE_CHANGED, () => {
+      console.log("Balance changed event received");
+      loadCurrentBalance();
+    });
+    
+    // Clean up subscription
+    return () => {
+      removeEventListener(balanceSubscription);
+    };
   }, []);
 
   // Load current balance
@@ -204,9 +215,16 @@ const AddTransactionScreen = ({ navigation, route }) => {
         // Refresh balance after successful transaction
         await loadCurrentBalance();
         
+        // Manually emit events to ensure all screens are updated
+        emitEvent(EVENTS.TRANSACTION_ADDED, { transaction: savedTransaction });
+        emitEvent(EVENTS.BALANCE_CHANGED);
+        if (savedTransaction.type === 'expense') {
+          emitEvent(EVENTS.BUDGET_UPDATED);
+        }
+        
         Alert.alert(
           'Success', 
-          `Transaction of ₹${transactionData.amount} added successfully!`, 
+          `Transaction of ₹${transactionData.amount} added successfully!`,
           [
             { 
               text: 'Add Another', 

@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FontAwesome5, MaterialIcons, Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
+import { addEventListener, removeEventListener, EVENTS } from '../utils/eventEmitter';
 import { 
   fetchUserData, 
   fetchRecentTransactions, 
@@ -16,6 +16,7 @@ import {
 } from '../services/dataService';
 import TransactionItem from '../components/TransactionItem';
 import { TransactionSkeleton, CardSkeleton } from '../components/LoadingSkeleton';
+import { ExpenseAnalysisSummary, MonthlyBudgetCard } from '../components';
 import { colors } from '../utils/colors';
 import {
 StyleSheet, 
@@ -41,7 +42,8 @@ const [spendingAnalytics, setSpendingAnalytics] = useState(null);
 const [financialInsights, setFinancialInsights] = useState(null);
 const [currentBalance, setCurrentBalance] = useState(0);
 const [error, setError] = useState(null);
-const fetchDashboardData = async () => {
+// Wrap in useCallback to maintain stable reference
+const fetchDashboardData = React.useCallback(async () => {
   try {
     setLoading(true);
     setError(null);
@@ -83,20 +85,28 @@ const fetchDashboardData = async () => {
     setLoading(false);
     setRefreshing(false);
   }
-};
+}, []);
 
 // Load data on initial render
 useEffect(() => {
   fetchDashboardData();
-}, []);
-
-// Refresh data when screen comes into focus
-useFocusEffect(
-  React.useCallback(() => {
+  
+  // Listen to relevant events with reduced frequency
+  const transactionSubscription = addEventListener(EVENTS.TRANSACTION_ADDED, () => {
+    console.log('DashboardScreen: Transaction added, refreshing data');
     fetchDashboardData();
-    return () => {};
-  }, [])
-);
+  });
+  
+  const transactionDeletedSubscription = addEventListener(EVENTS.TRANSACTION_DELETED, () => {
+    console.log('DashboardScreen: Transaction deleted, refreshing data');
+    fetchDashboardData();
+  });
+  
+  return () => {
+    removeEventListener(transactionSubscription);
+    removeEventListener(transactionDeletedSubscription);
+  };
+}, []); // Empty dependency array to prevent recreation of event listeners
 
 const onRefresh = () => {
   setRefreshing(true);
@@ -225,44 +235,19 @@ return (
             <FontAwesome5 name="chart-line" size={16} color="#fff" />
           </View>
           <Text style={styles.actionButtonText}>Analytics</Text>
-        </TouchableOpacity>
-      </View>      {/* Budget progress section */}
-      {budgetData && budgetData.total !== undefined && budgetData.spent !== undefined && (
-        <View style={styles.sectionContainer}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Monthly Budget</Text>            <TouchableOpacity onPress={() => navigation.navigate('Budget')}>
-              <Text style={styles.seeAllText}>See All</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.budgetProgressContainer}>
-            <Text style={styles.budgetInfoText}>
-              {(budgetData.spent || 0) > (budgetData.total || 0) 
-                ? 'Budget exceeded by ' 
-                : 'Remaining budget: '
-              }
-              <Text style={
-                (budgetData.spent || 0) > (budgetData.total || 0) 
-                  ? styles.negativeAmount 
-                  : styles.positiveAmount
-              }>
-                ₹{Math.abs((budgetData.total || 0) - (budgetData.spent || 0)).toFixed(2)}
-              </Text>
-            </Text>
-            <View style={styles.progressBarContainer}>
-              <View 
-                style={[
-                  styles.progressBar, 
-                  { 
-                    width: `${Math.min(((budgetData.spent || 0) / (budgetData.total || 1)) * 100, 100)}%`,
-                    backgroundColor: (budgetData.spent || 0) > (budgetData.total || 0) ? '#F44336' : '#4CAF50'
-                  }
-                ]} 
-              />
-            </View>            <Text style={styles.budgetRatioText}>
-              ₹{(budgetData.spent || 0).toFixed(2)} of ₹{(budgetData.total || 0).toFixed(2)}
-            </Text>
-          </View>
-        </View>      )}
+        </TouchableOpacity>      </View>      {/* Monthly Budget Section */}
+      <View style={styles.sectionContainer}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Monthly Budget</Text>
+          <TouchableOpacity onPress={() => navigation.navigate('Budget')}>
+            <Text style={styles.seeAllText}>Manage</Text>
+          </TouchableOpacity>
+        </View>        <MonthlyBudgetCard 
+          budgetData={budgets && budgets.length > 0 ? budgetData : null} 
+          onNavigate={(screen) => navigation.navigate(screen)}
+          key="monthly-budget"
+        />
+      </View>
 
       {/* Financial Health Indicators */}
       {financialInsights && (
@@ -387,12 +372,29 @@ return (
               );
             })
           }
-          
-          {budgets.filter(budget => (budget.spent / budget.amount) > 0.8).length === 0 && (
+            {budgets.filter(budget => (budget.spent / budget.amount) > 0.8).length === 0 && (
             <Text style={styles.emptyStateText}>All budgets are on track! 🎉</Text>
           )}
         </View>
-      )}      <View style={styles.sectionSeparator} />
+      )}
+      
+      <View style={styles.sectionSeparator} />
+      
+      {/* Expense Analysis Summary */}
+      <View style={styles.sectionContainer}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Expense Analysis</Text>
+          <TouchableOpacity onPress={() => navigation.navigate('Analytics')}>
+            <Text style={styles.seeAllText}>Details</Text>
+          </TouchableOpacity>
+        </View>
+        <ExpenseAnalysisSummary 
+          analytics={spendingAnalytics} 
+          loading={loading} 
+        />
+      </View>
+      
+      <View style={styles.sectionSeparator} />
       
       {/* Recent transactions */}
       <View style={styles.sectionContainer}>

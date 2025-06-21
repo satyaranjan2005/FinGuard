@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { fetchRecentTransactions, deleteTransaction as deleteTransactionService } from '../services/dataService';
 import colors from '../utils/colors';
+import { emitEvent, EVENTS } from '../utils/eventEmitter';
 
 // Helper function to darken/lighten colors
 const shadeColor = (color, percent) => {
@@ -164,10 +165,20 @@ const clearFilters = () => {
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
+          style: 'destructive',          onPress: async () => {
             try {
               await deleteTransactionService(transactionId);
+              
+              // Ensure budgets are updated by directly importing and calling the function
+              const { updateBudgetSummary } = require('../services/dataService');
+              console.log('TransactionHistory: Manually updating budget summary after delete');
+              await updateBudgetSummary();
+              
+              // Broadcast that a transaction was deleted
+              emitEvent(EVENTS.TRANSACTION_DELETED, { transactionId });
+              emitEvent(EVENTS.BALANCE_CHANGED);
+              emitEvent(EVENTS.BUDGET_UPDATED, { forcedUpdate: true });
+              
               Alert.alert('Success', 'Transaction deleted successfully');
               // Reload transactions to reflect changes
               loadTransactions();
