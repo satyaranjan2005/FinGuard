@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,63 +7,32 @@ import {
   TouchableOpacity,
   Alert,
   Switch,
-  StatusBar
+  StatusBar,
+  RefreshControl
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Card } from '../components';
 import colors from '../utils/colors';
+import { 
+  getNotificationHistory,
+  getNotificationSettings,
+  saveNotificationSettings,
+  markNotificationAsRead,
+  markAllNotificationsAsRead,
+  clearAllNotifications,
+  getUnreadCount,
+  formatNotificationTime,
+  createTestNotification,
+  sendDirectTestNotification
+} from '../services/notificationService';
+import { showPermissionSettingsAlert } from '../services/permissionService';
+import { addEventListener, removeEventListener, EVENTS } from '../utils/eventEmitter';
 
 const NotificationScreen = ({ navigation }) => {
-  const [notifications, setNotifications] = useState([
-    {
-      id: '1',
-      title: 'Budget Alert',
-      message: 'You have exceeded your monthly food budget by ₹150',
-      type: 'warning',
-      time: '2 hours ago',
-      read: false,
-      icon: 'warning'
-    },
-    {
-      id: '2',
-      title: 'Income Added',
-      message: 'Salary of ₹8,500 has been credited to your account',
-      type: 'success',
-      time: '1 day ago',
-      read: false,
-      icon: 'cash'
-    },
-    {
-      id: '3',
-      title: 'Spending Reminder',
-      message: 'You have ₹2,850 remaining in your monthly budget',
-      type: 'info',
-      time: '2 days ago',
-      read: true,
-      icon: 'information-circle'
-    },
-    {
-      id: '4',
-      title: 'Goal Achievement',
-      message: 'Congratulations! You reached your savings goal of ₹5,000',
-      type: 'success',
-      time: '3 days ago',
-      read: true,
-      icon: 'trophy'
-    },
-    {
-      id: '5',
-      title: 'Payment Due',
-      message: 'Your electricity bill of ₹1,200 is due tomorrow',
-      type: 'warning',
-      time: '1 week ago',
-      read: true,
-      icon: 'time'
-    }
-  ]);
-
+  const [notifications, setNotifications] = useState([]);
   const [settings, setSettings] = useState({
     budgetAlerts: true,
     goalReminders: true,
@@ -71,17 +40,79 @@ const NotificationScreen = ({ navigation }) => {
     weeklyReports: false,
     monthlyReports: true
   });
+  const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  // Load notifications and settings
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [notificationHistory, notificationSettings] = await Promise.all([
+        getNotificationHistory(),
+        getNotificationSettings()
+      ]);
+      
+      // Format notifications with time display
+      const formattedNotifications = notificationHistory.map(notification => ({
+        ...notification,
+        time: formatNotificationTime(notification.time)
+      }));
+      
+      setNotifications(formattedNotifications);
+      setSettings(notificationSettings);
+    } catch (error) {
+      console.error('Error loading notification data:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Refresh data
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
+  }, [loadData]);
+  // Load data when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
+
+  // Listen for new notifications
+  useEffect(() => {
+    const subscription = addEventListener(EVENTS.NOTIFICATION_ADDED, () => {
+      // Reload notifications when a new one is added
+      loadData();
+    });
+
+    return () => {
+      removeEventListener(subscription);
+    };
+  }, [loadData]);
 
   const unreadCount = notifications.filter(n => !n.read).length;
-  const handleNotificationPress = (notificationId) => {
-    if (Array.isArray(notifications)) {
-      setNotifications(notifications.map(n => 
-        n.id === notificationId ? { ...n, read: true } : n
-      ));
+
+  const handleNotificationPress = async (notificationId) => {
+    try {
+      // Mark as read locally first for immediate UI update
+      setNotifications(prevNotifications =>
+        prevNotifications.map(n => 
+          n.id === notificationId ? { ...n, read: true } : n
+        )
+      );
+      
+      // Then update in storage
+      await markNotificationAsRead(notificationId);
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+      // Revert local change if storage update fails
+      await loadData();
     }
   };
 
-  const clearAllNotifications = () => {
+  const clearAllNotificationsHandler = () => {
     Alert.alert(
       'Clear All Notifications',
       'Are you sure you want to clear all notifications?',
@@ -90,15 +121,75 @@ const NotificationScreen = ({ navigation }) => {
         { 
           text: 'Clear All', 
           style: 'destructive',
-          onPress: () => setNotifications([])
+          onPress: async () => {
+            try {
+              await clearAllNotifications();
+              setNotifications([]);
+            } catch (error) {
+              console.error('Error clearing notifications:', error);
+              Alert.alert('Error', 'Failed to clear notifications. Please try again.');
+            }
+          }
         }
       ]
     );
   };
-  const markAllAsRead = () => {
-    if (Array.isArray(notifications)) {
-      setNotifications(notifications.map(n => ({ ...n, read: true })));
+
+  const markAllAsReadHandler = async () => {
+    try {
+      // Update UI immediately
+      setNotifications(prevNotifications =>
+        prevNotifications.map(n => ({ ...n, read: true }))
+      );
+      
+      // Update in storage
+      await markAllNotificationsAsRead();
+    } catch (error) {
+      console.error('Error marking all as read:', error);
+      // Revert if storage update fails
+      await loadData();    }
+  };
+  const createTestNotificationHandler = async () => {
+    try {
+      await createTestNotification();
+      // Refresh notifications to show the new test notification
+      await loadData();
+    } catch (error) {
+      console.error('Error creating test notification:', error);
+      Alert.alert('Error', error.message || 'Failed to create test notification');
     }
+  };
+
+  const sendDirectNotificationHandler = async () => {
+    try {
+      await sendDirectTestNotification();
+      Alert.alert('Success', 'Direct notification sent! Check your device status bar.');
+    } catch (error) {
+      console.error('Error sending direct notification:', error);
+      Alert.alert('Error', error.message || 'Failed to send direct notification');
+    }
+  };
+
+  const toggleSetting = async (key) => {
+    try {
+      const newSettings = { ...settings, [key]: !settings[key] };
+      setSettings(newSettings);
+      await saveNotificationSettings(newSettings);
+      
+      // Show alert for permission settings if user is enabling notifications
+      if ((key === 'budgetAlerts' || key === 'goalReminders') && newSettings[key]) {
+        const hasPermission = await import('../services/permissionService').then(service => 
+          service.hasNotificationPermission()
+        );
+        
+        if (!hasPermission) {
+          showPermissionSettingsAlert();
+        }
+      }
+    } catch (error) {
+      console.error('Error updating settings:', error);
+      // Revert setting change
+      setSettings(prevSettings => ({ ...prevSettings, [key]: !newSettings[key] }));    }
   };
 
   const getNotificationColor = (type) => {
@@ -127,9 +218,7 @@ const NotificationScreen = ({ navigation }) => {
     }
   };
 
-  const toggleSetting = (key) => {
-    setSettings(prev => ({ ...prev, [key]: !prev[key] }));
-  };  return (
+  return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       {/* Header */}
@@ -148,32 +237,58 @@ const NotificationScreen = ({ navigation }) => {
               <Ionicons name="arrow-back" size={24} color="white" />
             </TouchableOpacity>
             <Text style={styles.headerTitle}>Notifications</Text>
-          </View>
-          <View style={styles.headerRight}>
+          </View>          <View style={styles.headerRight}>
             {unreadCount > 0 && (
               <View style={styles.badgeContainer}>
                 <Text style={styles.badgeText}>{unreadCount}</Text>
               </View>
             )}
-            <TouchableOpacity style={styles.headerButton} onPress={clearAllNotifications}>
+            <TouchableOpacity style={styles.headerButton} onPress={createTestNotificationHandler}>
+              <Ionicons name="add-circle-outline" size={20} color="white" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.headerButton} onPress={clearAllNotificationsHandler}>
               <Ionicons name="trash-outline" size={20} color="white" />
             </TouchableOpacity>
           </View>
         </View>
       </LinearGradient>
 
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+      <ScrollView 
+        style={styles.scrollView} 
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[colors.primary.main]}
+            tintColor={colors.primary.main}
+          />
+        }
+      >
         {/* Quick Actions */}
         {unreadCount > 0 && (
           <Card style={styles.actionsCard}>
             <View style={styles.actionsContainer}>
-              <TouchableOpacity style={styles.actionButton} onPress={markAllAsRead}>
+              <TouchableOpacity style={styles.actionButton} onPress={markAllAsReadHandler}>
                 <Ionicons name="checkmark-done" size={16} color={colors.info.main} />
                 <Text style={styles.actionText}>Mark All Read</Text>
               </TouchableOpacity>
             </View>
-          </Card>
-        )}
+          </Card>        )}        {/* Test Section - For Development */}
+        <Card style={styles.actionsCard}>
+          <View style={styles.actionsContainer}>
+            <TouchableOpacity style={styles.actionButton} onPress={createTestNotificationHandler}>
+              <Ionicons name="flask" size={16} color={colors.primary.main} />
+              <Text style={[styles.actionText, { color: colors.primary.main }]}>Add Test Notification</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={[styles.actionsContainer, { marginTop: 10 }]}>
+            <TouchableOpacity style={[styles.actionButton, { backgroundColor: '#fff3cd' }]} onPress={sendDirectNotificationHandler}>
+              <Ionicons name="notifications" size={16} color="#856404" />
+              <Text style={[styles.actionText, { color: '#856404' }]}>Send Direct Notification</Text>
+            </TouchableOpacity>
+          </View>
+        </Card>
 
         {/* Notifications List */}
         <View style={styles.notificationsContainer}>

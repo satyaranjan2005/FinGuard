@@ -3,6 +3,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { emitEvent, EVENTS } from '../utils/eventEmitter';
+import { createBudgetAlert, createIncomeNotification } from './notificationService';
 
 // Helper function to get category colors
 const getCategoryColor = (category) => {
@@ -844,9 +845,17 @@ export const saveTransaction = async (transaction) => {
     if (newTransaction.type === 'expense' && newTransaction.categoryId) {
       await updateBudgetFromTransaction(newTransaction);
     }
-    
-    // Update budget summary only once at the end
+      // Update budget summary only once at the end
     await updateBudgetSummary();
+    
+    // Create notification for income transactions
+    if (newTransaction.type === 'income') {
+      try {
+        await createIncomeNotification(newTransaction.amount, newTransaction.title || 'account');
+      } catch (notificationError) {
+        console.log('Income notification error (non-critical):', notificationError);
+      }
+    }
     
     // Emit event for transaction added
     emitEvent(EVENTS.TRANSACTION_ADDED, newTransaction);
@@ -1141,6 +1150,22 @@ export const updateBudgetSummary = async () => {
       lastUpdated: new Date().toISOString()
     };    // Save the updated budget summary
     await AsyncStorage.setItem('budgetData', JSON.stringify(budgetSummary));
+    
+    // Check for budget alerts and send notifications
+    try {
+      for (const category of categorySummaries) {
+        if (category.allocated > 0) {
+          const percentage = (category.spent / category.allocated) * 100;
+          const remaining = category.allocated - category.spent;
+            // Send notification if budget threshold is reached
+          if (percentage >= 75) { // 75% threshold or above
+            await createBudgetAlert(category.name, percentage, remaining, category.spent);
+          }
+        }
+      }
+    } catch (notificationError) {
+      console.log('Notification error (non-critical):', notificationError);
+    }
     
     // Broadcast that the budget was updated
     emitEvent(EVENTS.BUDGET_UPDATED, { 

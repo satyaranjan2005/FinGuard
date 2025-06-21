@@ -1,10 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import * as Notifications from 'expo-notifications';
 import AppNavigator from './src/navigation/AppNavigator';
 import AuthScreen from './src/screens/AuthScreen';
 import { authService } from './src/services/authService';
 import { initializeAppData } from './src/services/dataService';
+import { initializePermissions } from './src/services/permissionService';
+
+// Configure notification behavior
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+  }),
+});
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -17,7 +28,10 @@ export default function App() {
 
   const initializeApp = async () => {
     try {
-      // Initialize sample data first
+      // Initialize permissions first (for first-time users)
+      await initializePermissions();
+      
+      // Initialize sample data
       await initializeAppData();
       
       // Then check authentication
