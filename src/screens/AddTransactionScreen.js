@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Alert, StyleSheet, ActivityIndicator, StatusBar } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Alert, StyleSheet, ActivityIndicator, StatusBar, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -353,13 +353,12 @@ const AddTransactionScreen = ({ navigation, route }) => {
             </View>
           </Card>          {/* Amount Input */}
           <Card style={styles.card} elevation="medium">
-            <Text style={styles.sectionTitle}>Amount</Text>
-            <View style={[
+            <Text style={styles.sectionTitle}>Amount</Text>            <View style={[
               styles.amountInputContainer,
               isAmountFocused && styles.amountInputContainerFocused
             ]}>
               <Text style={styles.currencySymbol}>₹</Text>
-              <Input
+              <TextInput
                 placeholder="0.00"
                 value={amount}
                 onChangeText={handleAmountChange}
@@ -370,7 +369,8 @@ const AddTransactionScreen = ({ navigation, route }) => {
                 selectTextOnFocus={true}
                 onFocus={() => setIsAmountFocused(true)}
                 onBlur={() => setIsAmountFocused(false)}
-              />            </View>
+              />
+            </View>
             {amount && parseFloat(amount) > 0 && (
               <Text style={styles.amountHelper}>
                 Amount: ₹{parseFloat(amount).toFixed(2)}
@@ -574,12 +574,12 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     padding: 16,
     backgroundColor: 'white',
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
+  },  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
     color: '#1f2937',
-    marginBottom: 12,
+    marginBottom: 16,
+    letterSpacing: -0.3,
   },
   toggleContainer: {
     flexDirection: 'row',
@@ -615,65 +615,78 @@ const styles = StyleSheet.create({
     color: 'white',
   },
   toggleTextInactive: {
-    color: '#6b7280',
-  },  amountInputContainer: {
+    color: '#6b7280',  },  amountInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 2,
     borderColor: '#e5e7eb',
-    borderRadius: 12,
+    borderRadius: 16,
     backgroundColor: '#ffffff',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
+    minHeight: 60,
   },
   amountInputContainerFocused: {
     borderColor: '#3b82f6',
     shadowColor: '#3b82f6',
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 4,
+    backgroundColor: '#fefeff',
   },
   currencySymbol: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#374151',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },amountInput: {
-    flex: 1,
-    fontSize: 24,
-    fontWeight: '600',
-    paddingVertical: 12,
-    paddingRight: 16,
-  },  amountHelper: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginTop: 8,
-    fontWeight: '500',
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#1f2937',
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    letterSpacing: -0.5,
   },
-  balanceWarning: {
-    fontSize: 14,
-    color: '#f59e0b',
-    marginTop: 8,
+  amountInput: {
+    flex: 1,
+    fontSize: 28,
+    fontWeight: '700',
+    paddingVertical: 16,
+    paddingRight: 18,
+    color: '#1f2937',
+    letterSpacing: -0.5,
+    borderWidth: 0,
+    backgroundColor: 'transparent',
+    margin: 0,
+    textAlign: 'left',
+  },  amountHelper: {
+    fontSize: 15,
+    color: '#6b7280',
+    marginTop: 12,
     fontWeight: '600',
+    letterSpacing: -0.2,
     textAlign: 'center',
+  },  balanceWarning: {
+    fontSize: 15,
+    color: '#f59e0b',
+    marginTop: 12,
+    fontWeight: '700',
+    textAlign: 'center',
+    letterSpacing: -0.2,
   },
   balanceError: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#ef4444',
-    marginTop: 8,
-    fontWeight: '600',
+    marginTop: 12,
+    fontWeight: '700',
     textAlign: 'center',
+    letterSpacing: -0.2,
   },
   balanceOk: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#10b981',
-    marginTop: 8,
-    fontWeight: '600',
+    marginTop: 12,
+    fontWeight: '700',
     textAlign: 'center',
+    letterSpacing: -0.2,
   },
   categoryPreview: {
     flexDirection: 'row',

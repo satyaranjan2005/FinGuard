@@ -42,280 +42,22 @@ const getCategoryColor = (category) => {
 
 // Sample data - In a real app, this would be replaced with API calls or database operations
 const SAMPLE_USER_DATA = {
-  name: 'Rajesh Kumar',
-  balance: 45780.25,
-  monthlyIncome: 75000.00,
-  monthlyExpenses: 42650.75,
-  savingsGoal: 100000,
-  currentSavings: 65400,
+  name: 'User',
+  balance: 0.00,
+  monthlyIncome: 0.00,
+  monthlyExpenses: 0.00,
+  savingsGoal: 0,
+  currentSavings: 0,
 };
 
 const SAMPLE_TRANSACTIONS = [
-  // Recent transactions (June 2025)
-  {
-    id: 't1',
-    title: 'Big Basket Grocery',
-    amount: 2850.50,
-    type: 'expense',
-    category: 'Food',
-    date: new Date(2025, 5, 17), // June 17, 2025 (today)
-    icon: 'cart',
-    paymentMode: 'upi'
-  },
-  {
-    id: 't2',
-    title: 'Monthly Salary',
-    amount: 75000.00,
-    type: 'income',
-    category: 'Salary',
-    date: new Date(2025, 5, 1), // June 1, 2025
-    icon: 'cash',
-    paymentMode: 'bank_transfer'
-  },
-  {
-    id: 't3',
-    title: 'Zomato Food Delivery',
-    amount: 450.00,
-    type: 'expense',
-    category: 'Food',
-    date: new Date(2025, 5, 16), // June 16, 2025
-    icon: 'restaurant',
-    paymentMode: 'credit_card'
-  },
-  {
-    id: 't4',
-    title: 'Electricity Bill - BESCOM',
-    amount: 1875.00,
-    type: 'expense',
-    category: 'Utilities',
-    date: new Date(2025, 5, 15), // June 15, 2025
-    icon: 'flash',
-    paymentMode: 'upi'
-  },
-  {
-    id: 't5',
-    title: 'Uber Ride',
-    amount: 285.50,
-    type: 'expense',
-    category: 'Transportation',
-    date: new Date(2025, 5, 15), // June 15, 2025
-    icon: 'car',
-    paymentMode: 'digital_wallet'
-  },
-  {
-    id: 't6',
-    title: 'Netflix Subscription',
-    amount: 649.00,
-    type: 'expense',
-    category: 'Entertainment',
-    date: new Date(2025, 5, 14), // June 14, 2025
-    icon: 'film',
-    paymentMode: 'credit_card'
-  },
-  {
-    id: 't7',
-    title: 'Freelance Project Payment',
-    amount: 15000.00,
-    type: 'income',
-    category: 'Freelance',
-    date: new Date(2025, 5, 13), // June 13, 2025
-    icon: 'laptop',
-    paymentMode: 'bank_transfer'
-  },
-  {
-    id: 't8',
-    title: 'Petrol - HP',
-    amount: 3200.00,
-    type: 'expense',
-    category: 'Transportation',
-    date: new Date(2025, 5, 12), // June 12, 2025
-    icon: 'car',
-    paymentMode: 'credit_card'
-  },
-  {
-    id: 't9',
-    title: 'Medical Checkup',
-    amount: 2500.00,
-    type: 'expense',
-    category: 'Healthcare',
-    date: new Date(2025, 5, 11), // June 11, 2025
-    icon: 'medical',
-    paymentMode: 'cash'
-  },
-  {
-    id: 't10',
-    title: 'Amazon Shopping',
-    amount: 1850.75,
-    type: 'expense',
-    category: 'Shopping',
-    date: new Date(2025, 5, 10), // June 10, 2025
-    icon: 'bag',
-    paymentMode: 'credit_card'
-  },
-  {
-    id: 't11',
-    title: 'Internet Bill - Airtel',
-    amount: 999.00,
-    type: 'expense',
-    category: 'Utilities',
-    date: new Date(2025, 5, 9), // June 9, 2025
-    icon: 'wifi',
-    paymentMode: 'upi'
-  },
-  {
-    id: 't12',
-    title: 'Cafe Coffee Day',
-    amount: 320.00,
-    type: 'expense',
-    category: 'Food',
-    date: new Date(2025, 5, 8), // June 8, 2025
-    icon: 'cafe',
-    paymentMode: 'debit_card'
-  },
-  {
-    id: 't13',
-    title: 'Stock Dividend',
-    amount: 2400.00,
-    type: 'income',
-    category: 'Investment',
-    date: new Date(2025, 5, 7), // June 7, 2025
-    icon: 'trending-up',
-    paymentMode: 'bank_transfer'
-  },
-  {
-    id: 't14',
-    title: 'Gym Membership',
-    amount: 1500.00,
-    type: 'expense',
-    category: 'Health',
-    date: new Date(2025, 5, 6), // June 6, 2025
-    icon: 'fitness',
-    paymentMode: 'upi'
-  },
-  {
-    id: 't15',
-    title: 'Book Purchase',
-    amount: 750.00,
-    type: 'expense',
-    category: 'Education',
-    date: new Date(2025, 5, 5), // June 5, 2025
-    icon: 'book',
-    paymentMode: 'cash'
-  },
-  {
-    id: 't16',
-    title: 'Mobile Recharge',
-    amount: 399.00,
-    type: 'expense',
-    category: 'Utilities',
-    date: new Date(2025, 5, 4), // June 4, 2025
-    icon: 'phone-portrait',
-    paymentMode: 'upi'
-  },
-  {
-    id: 't17',
-    title: 'Rent Payment',
-    amount: 18000.00,
-    type: 'expense',
-    category: 'Housing',
-    date: new Date(2025, 5, 3), // June 3, 2025
-    icon: 'home',
-    paymentMode: 'bank_transfer'
-  },
-  {
-    id: 't18',
-    title: 'Mutual Fund SIP',
-    amount: 5000.00,
-    type: 'expense',
-    category: 'Investment',
-    date: new Date(2025, 5, 2), // June 2, 2025
-    icon: 'trending-up',
-    paymentMode: 'bank_transfer'
-  },
-  // Previous month transactions (May 2025)
-  {
-    id: 't19',
-    title: 'May Salary',
-    amount: 75000.00,
-    type: 'income',
-    category: 'Salary',
-    date: new Date(2025, 4, 31), // May 31, 2025
-    icon: 'cash',
-    paymentMode: 'bank_transfer'
-  },
-  {
-    id: 't20',
-    title: 'Mother\'s Day Gift',
-    amount: 3500.00,
-    type: 'expense',
-    category: 'Shopping',
-    date: new Date(2025, 4, 12), // May 12, 2025
-    icon: 'gift',
-    paymentMode: 'credit_card'
-  },
+  // Empty array - no sample transactions
 ];
 
 const SAMPLE_BUDGET_DATA = {
-  total: 50000,
-  spent: 42650.75,
-  categories: [
-    { 
-      name: 'Food', 
-      allocated: 8000, 
-      spent: 3620.50, 
-      color: '#10b981',
-      icon: 'restaurant'
-    },
-    { 
-      name: 'Housing', 
-      allocated: 18000, 
-      spent: 18000, 
-      color: '#3b82f6',
-      icon: 'home'
-    },
-    { 
-      name: 'Transportation', 
-      allocated: 5000, 
-      spent: 3485.50, 
-      color: '#8b5cf6',
-      icon: 'car'
-    },
-    { 
-      name: 'Utilities', 
-      allocated: 4000, 
-      spent: 2873.00, 
-      color: '#f59e0b',
-      icon: 'flash'
-    },
-    { 
-      name: 'Entertainment', 
-      allocated: 3000, 
-      spent: 649.00, 
-      color: '#ef4444',
-      icon: 'film'
-    },
-    { 
-      name: 'Healthcare', 
-      allocated: 4000, 
-      spent: 2500.00, 
-      color: '#06b6d4',
-      icon: 'medical'
-    },
-    { 
-      name: 'Shopping', 
-      allocated: 5000, 
-      spent: 5350.75, 
-      color: '#84cc16',
-      icon: 'bag'
-    },
-    { 
-      name: 'Investment', 
-      allocated: 3000, 
-      spent: 5000.00, 
-      color: '#f97316',
-      icon: 'trending-up'
-    },
-  ]
+  total: 0,
+  spent: 0,
+  categories: []
 };
 
 const SAMPLE_CATEGORIES = [
@@ -436,89 +178,11 @@ const SAMPLE_CATEGORIES = [
 ];
 
 const SAMPLE_GOALS = [
-  {
-    id: 'goal1',
-    title: 'Emergency Fund',
-    targetAmount: 300000,
-    currentAmount: 185000,
-    deadline: new Date(2025, 11, 31), // December 31, 2025
-    category: 'Savings',
-    priority: 'high',
-    color: '#ef4444'
-  },
-  {
-    id: 'goal2',
-    title: 'New Car Purchase',
-    targetAmount: 800000,
-    currentAmount: 245000,
-    deadline: new Date(2026, 5, 15), // June 15, 2026
-    category: 'Transportation',
-    priority: 'medium',
-    color: '#3b82f6'
-  },
-  {
-    id: 'goal3',
-    title: 'Vacation to Europe',
-    targetAmount: 150000,
-    currentAmount: 45000,
-    deadline: new Date(2025, 9, 1), // October 1, 2025
-    category: 'Travel',
-    priority: 'low',
-    color: '#10b981'
-  },
-  {
-    id: 'goal4',
-    title: 'Home Down Payment',
-    targetAmount: 1500000,
-    currentAmount: 420000,
-    deadline: new Date(2027, 2, 15), // March 15, 2027
-    category: 'Housing',
-    priority: 'high',
-    color: '#f59e0b'
-  }
+  // Empty array - no sample goals
 ];
 
 const SAMPLE_BUDGETS = [
-  {
-    id: 'budget1',
-    categoryId: 'cat1',
-    amount: 8000,
-    period: 'monthly',
-    startDate: new Date(2025, 5, 1),
-    endDate: new Date(2025, 5, 30),
-    spent: 3620.50,
-    alertThreshold: 80
-  },
-  {
-    id: 'budget2',
-    categoryId: 'cat2',
-    amount: 5000,
-    period: 'monthly',
-    startDate: new Date(2025, 5, 1),
-    endDate: new Date(2025, 5, 30),
-    spent: 3485.50,
-    alertThreshold: 90
-  },
-  {
-    id: 'budget3',
-    categoryId: 'cat7',
-    amount: 18000,
-    period: 'monthly',
-    startDate: new Date(2025, 5, 1),
-    endDate: new Date(2025, 5, 30),
-    spent: 18000,
-    alertThreshold: 95
-  },
-  {
-    id: 'budget4',
-    categoryId: 'cat6',
-    amount: 4000,
-    period: 'monthly',
-    startDate: new Date(2025, 5, 1),
-    endDate: new Date(2025, 5, 30),
-    spent: 2873.00,
-    alertThreshold: 85
-  }
+  // Empty array - no sample budgets
 ];
 
 const SAMPLE_FINANCIAL_TIPS = [
@@ -560,61 +224,7 @@ const SAMPLE_FINANCIAL_TIPS = [
 ];
 
 const SAMPLE_BILL_REMINDERS = [
-  {
-    id: 'bill1',
-    title: 'Electricity Bill',
-    amount: 1875.00,
-    dueDate: new Date(2025, 5, 20), // June 20, 2025
-    category: 'Utilities',
-    provider: 'BESCOM',
-    status: 'pending',
-    recurring: true,
-    icon: 'flash'
-  },
-  {
-    id: 'bill2',
-    title: 'Internet Bill',
-    amount: 999.00,
-    dueDate: new Date(2025, 5, 25), // June 25, 2025
-    category: 'Utilities',
-    provider: 'Airtel',
-    status: 'pending',
-    recurring: true,
-    icon: 'wifi'
-  },
-  {
-    id: 'bill3',
-    title: 'Mobile Recharge',
-    amount: 399.00,
-    dueDate: new Date(2025, 5, 22), // June 22, 2025
-    category: 'Utilities',
-    provider: 'Vodafone',
-    status: 'pending',
-    recurring: true,
-    icon: 'phone-portrait'
-  },
-  {
-    id: 'bill4',
-    title: 'Netflix Subscription',
-    amount: 649.00,
-    dueDate: new Date(2025, 6, 14), // July 14, 2025
-    category: 'Entertainment',
-    provider: 'Netflix',
-    status: 'upcoming',
-    recurring: true,
-    icon: 'film'
-  },
-  {
-    id: 'bill5',
-    title: 'Gym Membership',
-    amount: 1500.00,
-    dueDate: new Date(2025, 6, 6), // July 6, 2025
-    category: 'Health',
-    provider: 'FitGym',
-    status: 'upcoming',
-    recurring: true,
-    icon: 'fitness'
-  }
+  // Empty array - no sample bill reminders
 ];
 
 // Simulated delay to mimic API calls
@@ -1766,6 +1376,22 @@ export const initializeAppData = async () => {
     console.log('App data initialized with sample data');
   } catch (error) {
     console.error('Error initializing app data:', error);
+  }
+};
+
+/**
+ * Clear all app data (transactions, goals, budgets)
+ * @returns {Promise<void>}
+ */
+export const clearAllData = async () => {
+  try {
+    await AsyncStorage.setItem('transactions', JSON.stringify([]));
+    await AsyncStorage.setItem('goals', JSON.stringify([]));
+    await AsyncStorage.setItem('budgets', JSON.stringify([]));
+    
+    console.log('All app data cleared');
+  } catch (error) {
+    console.error('Error clearing app data:', error);
   }
 };
 
