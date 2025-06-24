@@ -65,21 +65,21 @@ const CustomAlert = ({
           icon: 'checkmark-circle',
           iconColor: colors.success.main,
           gradient: ['#10b981', '#059669'],
-          bgColor: 'rgba(16, 185, 129, 0.1)',
+          bgColor: 'rgba(16, 185, 129, 0.08)',
         };
       case 'warning':
         return {
           icon: 'warning',
           iconColor: colors.warning.main,
           gradient: ['#f59e0b', '#d97706'],
-          bgColor: 'rgba(245, 158, 11, 0.1)',
+          bgColor: 'rgba(245, 158, 11, 0.08)',
         };
       case 'error':
         return {
           icon: 'close-circle',
           iconColor: colors.danger.main,
           gradient: ['#ef4444', '#dc2626'],
-          bgColor: 'rgba(239, 68, 68, 0.1)',
+          bgColor: 'rgba(239, 68, 68, 0.08)',
         };
       case 'info':
       default:
@@ -87,7 +87,7 @@ const CustomAlert = ({
           icon: 'information-circle',
           iconColor: colors.info.main,
           gradient: ['#3b82f6', '#2563eb'],
-          bgColor: 'rgba(59, 130, 246, 0.1)',
+          bgColor: 'rgba(59, 130, 246, 0.08)',
         };
     }
   };
@@ -102,9 +102,22 @@ const CustomAlert = ({
       onClose();
     }
   };
+
   const defaultButtons = buttons.length > 0 ? buttons : [
     { text: 'OK', onPress: onClose, style: 'default' }
   ];
+
+  // Calculate dynamic heights based on button count and content
+  const getAlertHeight = () => {
+    const baseHeight = 180; // Header + basic content
+    const messageHeight = message ? Math.max(60, (message.length / 50) * 20) : 40;
+    const buttonHeight = defaultButtons.length === 3 ? 120 : 60; // Increased button area height
+    const padding = 20;
+    
+    return Math.min(baseHeight + messageHeight + buttonHeight + padding, height * 0.85);
+  };
+
+  const alertHeight = getAlertHeight();
 
   // Check if this is a confirmation or destructive alert
   const isConfirmationAlert = defaultButtons.some(button => 
@@ -119,7 +132,6 @@ const CustomAlert = ({
   );
 
   const isDestructiveAlert = type === 'error' || defaultButtons.some(button => button.style === 'destructive');
-  const needsExtraHeight = isConfirmationAlert || isDestructiveAlert;
 
   return (
     <Modal
@@ -130,62 +142,73 @@ const CustomAlert = ({
       onRequestClose={onClose}
     >
       <StatusBar backgroundColor="rgba(0,0,0,0.5)" barStyle="light-content" />
-      <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>        <Animated.View 
+      <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
+        <Animated.View 
           style={[
             styles.alertContainer,
+            {
+              height: alertHeight,
+              transform: [{ translateY: slideAnim }]
+            },
             defaultButtons.length === 1 && styles.singleButtonAlert,
             defaultButtons.length === 2 && styles.twoButtonAlert,
             defaultButtons.length === 3 && styles.threeButtonAlert,
-            needsExtraHeight && defaultButtons.length === 1 && styles.confirmationSingleButtonAlert,
-            needsExtraHeight && defaultButtons.length === 2 && styles.confirmationTwoButtonAlert,
-            needsExtraHeight && defaultButtons.length === 3 && styles.confirmationThreeButtonAlert,
-            { transform: [{ translateY: slideAnim }] }
           ]}
         >
           {/* Header with icon */}
-          <View style={[styles.header, { backgroundColor: config.bgColor }]}>            <View style={[styles.iconContainer, { backgroundColor: config.iconColor }]}>
-              <Ionicons name={config.icon} size={32} color="white" />
+          <View style={[styles.header, { backgroundColor: config.bgColor }]}>
+            <View style={[styles.iconContainer, { backgroundColor: config.iconColor }]}>
+              <Ionicons name={config.icon} size={28} color="white" />
             </View>
-          </View>          {/* Content */}
+          </View>
+
+          {/* Content */}
           <View style={[
             styles.content,
             defaultButtons.length === 1 && styles.singleButtonContent,
             defaultButtons.length === 2 && styles.twoButtonContent,
-            defaultButtons.length === 3 && styles.threeButtonContent
+            defaultButtons.length === 3 && styles.threeButtonContent,
           ]}>
             <Text style={styles.title}>{title}</Text>
-            <Text style={styles.message}>{message}</Text>
-          </View>          {/* Buttons */}
+            <Text style={[
+              styles.message,
+              message?.length > 100 && styles.longMessage
+            ]}>
+              {message}
+            </Text>
+          </View>
+
+          {/* Buttons */}
           <View style={[
             styles.buttonContainer,
             defaultButtons.length === 1 && styles.singleButtonContainer,
             defaultButtons.length === 2 && styles.twoButtonContainer,
             defaultButtons.length === 3 && styles.threeButtonContainer,
-            needsExtraHeight && styles.confirmationButtonContainer
           ]}>
             {defaultButtons.length === 3 ? (
               // Special layout for 3 buttons: 2 on top, 1 below
-              <View>
+              <View style={styles.threeButtonLayout}>
                 <View style={styles.buttonRow}>
                   {defaultButtons.slice(0, 2).map((button, index) => {
                     const isDestructive = button.style === 'destructive';
                     const isCancel = button.style === 'cancel';
                     const isPrimary = button.style === 'default' || (!isDestructive && !isCancel);
 
-                    return (                      <TouchableOpacity
+                    return (
+                      <TouchableOpacity
                         key={index}
                         style={[
                           styles.button,
-                          styles.twoButtonLayout,
-                          needsExtraHeight && styles.confirmationButton,
+                          styles.splitButton,
+                          styles.threeButtonTop,
                           isDestructive && styles.destructiveButton,
                           isCancel && styles.cancelButton,
                           isPrimary && styles.primaryButton,
-                          index === 0 && styles.firstButtonInRow,
-                          index === 1 && styles.lastButtonInRow,
+                          index === 0 && styles.leftSplitButton,
+                          index === 1 && styles.rightSplitButton,
                         ]}
                         onPress={() => handleButtonPress(button)}
-                        activeOpacity={0.8}
+                        activeOpacity={0.7}
                       >
                         {isPrimary && !isCancel ? (
                           <LinearGradient
@@ -210,24 +233,27 @@ const CustomAlert = ({
                       </TouchableOpacity>
                     );
                   })}
-                </View>                <View style={styles.singleButtonRow}>
+                </View>
+                
+                <View style={styles.bottomButtonRow}>
                   {(() => {
                     const button = defaultButtons[2];
                     const isDestructive = button.style === 'destructive';
                     const isCancel = button.style === 'cancel';
                     const isPrimary = button.style === 'default' || (!isDestructive && !isCancel);
 
-                    return (                      <TouchableOpacity
+                    return (
+                      <TouchableOpacity
                         style={[
                           styles.button,
-                          styles.fullWidthButton,
-                          needsExtraHeight && styles.confirmationButton,
+                          styles.fullButton,
+                          styles.threeButtonBottom,
                           isDestructive && styles.destructiveButton,
                           isCancel && styles.cancelButton,
                           isPrimary && styles.primaryButton,
                         ]}
                         onPress={() => handleButtonPress(button)}
-                        activeOpacity={0.8}
+                        activeOpacity={0.7}
                       >
                         {isPrimary && !isCancel ? (
                           <LinearGradient
@@ -256,49 +282,51 @@ const CustomAlert = ({
               </View>
             ) : (
               // Standard layout for 1 or 2 buttons
-              defaultButtons.map((button, index) => {
-                const isDestructive = button.style === 'destructive';
-                const isCancel = button.style === 'cancel';
-                const isPrimary = button.style === 'default' || (!isDestructive && !isCancel);
+              <View style={styles.buttonRow}>
+                {defaultButtons.map((button, index) => {
+                  const isDestructive = button.style === 'destructive';
+                  const isCancel = button.style === 'cancel';
+                  const isPrimary = button.style === 'default' || (!isDestructive && !isCancel);
 
-                return (                  <TouchableOpacity
-                    key={index}
-                    style={[
-                      styles.button,
-                      needsExtraHeight && styles.confirmationButton,
-                      isDestructive && styles.destructiveButton,
-                      isCancel && styles.cancelButton,
-                      isPrimary && styles.primaryButton,
-                      defaultButtons.length === 1 && styles.singleButton,
-                      index === 0 && defaultButtons.length > 1 && styles.firstButton,
-                      index === defaultButtons.length - 1 && defaultButtons.length > 1 && styles.lastButton,
-                    ]}
-                    onPress={() => handleButtonPress(button)}
-                    activeOpacity={0.8}
-                  >
-                    {isPrimary && !isCancel ? (
-                      <LinearGradient
-                        colors={config.gradient}
-                        style={styles.gradientButton}
-                      >
-                        <Text style={[styles.buttonText, styles.primaryButtonText]}>
+                  return (
+                    <TouchableOpacity
+                      key={index}
+                      style={[
+                        styles.button,
+                        defaultButtons.length === 1 ? styles.fullButton : styles.splitButton,
+                        isDestructive && styles.destructiveButton,
+                        isCancel && styles.cancelButton,
+                        isPrimary && styles.primaryButton,
+                        defaultButtons.length === 2 && index === 0 && styles.leftSplitButton,
+                        defaultButtons.length === 2 && index === 1 && styles.rightSplitButton,
+                      ]}
+                      onPress={() => handleButtonPress(button)}
+                      activeOpacity={0.7}
+                    >
+                      {isPrimary && !isCancel ? (
+                        <LinearGradient
+                          colors={config.gradient}
+                          style={styles.gradientButton}
+                        >
+                          <Text style={[styles.buttonText, styles.primaryButtonText]}>
+                            {button.text}
+                          </Text>
+                        </LinearGradient>
+                      ) : (
+                        <Text 
+                          style={[
+                            styles.buttonText,
+                            isDestructive && styles.destructiveButtonText,
+                            isCancel && styles.cancelButtonText,
+                          ]}
+                        >
                           {button.text}
                         </Text>
-                      </LinearGradient>
-                    ) : (
-                      <Text 
-                        style={[
-                          styles.buttonText,
-                          isDestructive && styles.destructiveButtonText,
-                          isCancel && styles.cancelButtonText,
-                        ]}
-                      >
-                        {button.text}
-                      </Text>
-                    )}
-                  </TouchableOpacity>
-                );
-              })
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             )}
           </View>
         </Animated.View>
@@ -307,176 +335,217 @@ const CustomAlert = ({
   );
 };
 
-const styles = StyleSheet.create({  overlay: {
+const styles = StyleSheet.create({
+  overlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 24, // Increased horizontal padding
-    paddingVertical: 32, // Added vertical padding for better spacing
-  },  alertContainer: {
+    paddingHorizontal: 20,
+  },
+  
+  alertContainer: {
     backgroundColor: 'white',
-    borderRadius: 18, // Slightly increased border radius
+    borderRadius: 16,
     width: '100%',
-    maxWidth: Math.min(360, width * 0.92), // Increased width for better button visibility
+    maxWidth: 340,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 }, // Enhanced shadow
-    shadowOpacity: 0.3,
-    shadowRadius: 24,
-    elevation: 12,
-    overflow: 'hidden',
-    marginVertical: 16, // Added vertical margin for better spacing
-  },  singleButtonAlert: {
-    minHeight: 240, // Standard height for single button alerts
-  },
-  twoButtonAlert: {
-    minHeight: 260, // Standard height for two button alerts
-  },
-  threeButtonAlert: {
-    minHeight: 320, // Standard height for three button alerts
-  },
-  confirmationSingleButtonAlert: {
-    minHeight: 300, // Extra height for confirmation/destructive single button alerts
-  },
-  confirmationTwoButtonAlert: {
-    minHeight: 320, // Extra height for confirmation/destructive two button alerts
-  },
-  confirmationThreeButtonAlert: {
-    minHeight: 400, // Extra height for confirmation/destructive three button alerts
-  },header: {
-    alignItems: 'center',
-    paddingVertical: 24, // Increased vertical padding
-    paddingHorizontal: 24, // Increased horizontal padding
-  },  iconContainer: {
-    width: 60, // Slightly increased size
-    height: 60,
-    borderRadius: 30,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 }, // Enhanced shadow
+    shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 8,
-    marginBottom: 4, // Added bottom margin
-  },  content: {
-    paddingHorizontal: 20, // Standard horizontal padding
-    paddingBottom: 20, // Standard bottom padding
+    shadowRadius: 20,
+    elevation: 10,
+    overflow: 'hidden',
+  },
+
+  // Specific heights for different button configurations
+  singleButtonAlert: {
+    minHeight: 240,
+  },
+
+  twoButtonAlert: {
+    minHeight: 260,
+  },
+
+  threeButtonAlert: {
+    minHeight: 300,
+  },
+
+  header: {
     alignItems: 'center',
-    flex: 1,
+    paddingTop: 28,
+    paddingBottom: 16,
+    paddingHorizontal: 24,
+    height: 88,
+  },
+  
+  iconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     justifyContent: 'center',
-    minHeight: 60, // Standard minimum height for content area
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6,
   },
+
+  content: {
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+  },
+
   singleButtonContent: {
-    paddingBottom: 24, // Standard spacing for single button
+    paddingBottom: 24,
+    minHeight: 80,
   },
+
   twoButtonContent: {
-    paddingBottom: 22, // Standard spacing for two buttons
+    paddingBottom: 24,
+    minHeight: 96,
   },
+
   threeButtonContent: {
-    paddingBottom: 20, // Standard spacing for three buttons
-  },title: {
-    fontSize: 19, // Slightly increased font size
+    paddingBottom: 20,
+    minHeight: 80,
+  },
+  
+  title: {
+    fontSize: 18,
     fontWeight: '700',
     color: '#1e293b',
     textAlign: 'center',
-    marginBottom: 8, // Increased margin for better spacing
-    lineHeight: 24, // Added line height for better text spacing
+    marginBottom: 12,
+    lineHeight: 24,
   },
+  
   message: {
-    fontSize: 15, // Slightly increased font size
+    fontSize: 15,
     color: '#64748b',
     textAlign: 'center',
-    lineHeight: 22, // Increased line height for better readability
-    paddingHorizontal: 4, // Added horizontal padding
-  },  buttonContainer: {
+    lineHeight: 22,
+  },
+
+  longMessage: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+
+  buttonContainer: {
     borderTopWidth: 1,
     borderTopColor: '#f1f5f9',
-    marginTop: 8, // Standard top margin
   },
+
   singleButtonContainer: {
-    paddingBottom: 16, // Standard bottom padding for single button
+    height: 60,
+    minHeight: 60,
   },
+
   twoButtonContainer: {
-    paddingBottom: 14, // Standard bottom padding for two buttons
+    height: 60,
+    minHeight: 60,
   },
+
   threeButtonContainer: {
-    paddingBottom: 12, // Standard bottom padding for three buttons
+    height: 120,
+    minHeight: 120,
   },
-  confirmationButtonContainer: {
-    marginTop: 12, // Extra top margin for confirmation/destructive alerts
-    paddingBottom: 8, // Additional bottom padding for confirmation/destructive alerts
-  },  buttonRow: {
+
+  threeButtonLayout: {
+    height: 120,
+    minHeight: 120,
+  },
+  
+  buttonRow: {
     flexDirection: 'row',
+    height: 60,
+    minHeight: 60,
   },
-  singleButtonRow: {
+  
+  bottomButtonRow: {
     borderTopWidth: 1,
     borderTopColor: '#f1f5f9',
-  },button: {
-    flex: 1,
-    paddingVertical: 14, // Standard vertical padding
-    paddingHorizontal: 12, // Standard horizontal padding
+    height: 60,
+    minHeight: 60,
+  },
+
+  button: {
+    paddingVertical: 18,
+    paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 52, // Standard minimum height for all buttons
+    height: 60,
+    minHeight: 60,
   },
-  confirmationButton: {
-    paddingVertical: 18, // Enhanced padding for confirmation/destructive buttons
-    paddingHorizontal: 16, // Enhanced horizontal padding
-    minHeight: 64, // Increased height for confirmation/destructive buttons
-  },twoButtonLayout: {
+
+  threeButtonTop: {
+    height: 60,
+    minHeight: 60,
+  },
+
+  threeButtonBottom: {
+    height: 60,
+    minHeight: 60,
+  },
+  
+  fullButton: {
     flex: 1,
   },
-  fullWidthButton: {
+  
+  splitButton: {
     flex: 1,
   },
-  firstButtonInRow: {
+  
+  leftSplitButton: {
     borderRightWidth: 0.5,
     borderRightColor: '#f1f5f9',
   },
-  lastButtonInRow: {
+  
+  rightSplitButton: {
     borderLeftWidth: 0.5,
     borderLeftColor: '#f1f5f9',
   },
-  singleButton: {
-    borderRadius: 0,
-  },
-  firstButton: {
-    borderRightWidth: 0.5,
-    borderRightColor: '#f1f5f9',
-  },
-  lastButton: {
-    borderLeftWidth: 0.5,
-    borderLeftColor: '#f1f5f9',
-  },
+
   primaryButton: {
     backgroundColor: 'transparent',
   },
+  
   cancelButton: {
     backgroundColor: '#f8fafc',
   },
+  
   destructiveButton: {
     backgroundColor: '#fef2f2',
-  },  gradientButton: {
-    paddingVertical: 10, // Standard padding for gradient buttons
-    paddingHorizontal: 20, // Standard horizontal padding
-    borderRadius: 10, // Standard border radius
+  },
+
+  gradientButton: {
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 70, // Standard minimum width
+    minWidth: 80,
+    minHeight: 44,
   },
+  
   buttonText: {
-    fontSize: 15, // Slightly increased font size for better readability
+    fontSize: 16,
     fontWeight: '600',
     textAlign: 'center',
-    lineHeight: 20, // Added line height
+    lineHeight: 20,
   },
+  
   primaryButtonText: {
     color: 'white',
   },
+  
   cancelButtonText: {
     color: '#64748b',
   },
+  
   destructiveButtonText: {
     color: '#dc2626',
   },
