@@ -21,6 +21,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { fetchGoals, saveGoal, addToGoal, updateGoal, deleteGoal } from '../services/dataService';
 import { storageService } from '../services/storageService';
 import colors from '../utils/colors';
+import { 
+  showSuccessAlert, 
+  showErrorAlert, 
+  showWarningAlert, 
+  showInfoAlert 
+} from '../services/alertService';
 
 const GoalsScreen = ({ navigation }) => {
   const [goals, setGoals] = useState([]);
@@ -34,6 +40,9 @@ const GoalsScreen = ({ navigation }) => {
   const [newGoalCategory, setNewGoalCategory] = useState('');
   const [newGoalPriority, setNewGoalPriority] = useState('medium');
   const [newGoalDeadline, setNewGoalDeadline] = useState('');
+  const [hasDeadline, setHasDeadline] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date());
   const [contributionAmount, setContributionAmount] = useState('');
   const [editingGoal, setEditingGoal] = useState(null);
   useEffect(() => {
@@ -62,13 +71,13 @@ const GoalsScreen = ({ navigation }) => {
         ...goal,
         progressPercentage: goal.targetAmount > 0 ? (goal.currentAmount / goal.targetAmount) * 100 : 0,
         remaining: Math.max(goal.targetAmount - goal.currentAmount, 0),
-        daysLeft: goal.deadline ? Math.ceil((new Date(goal.deadline) - new Date()) / (1000 * 60 * 60 * 24)) : 365
+        daysLeft: goal.deadline ? Math.ceil((new Date(goal.deadline) - new Date()) / (1000 * 60 * 60 * 24)) : null
       }));
       
       setGoals(processedGoals);
     } catch (error) {
       console.error('Error loading goals:', error);
-      Alert.alert('Error', 'Failed to load goals. Please try again.');
+      showErrorAlert('Error', 'Failed to load goals. Please try again.');
       setGoals([]);
     } finally {
       setLoading(false);
@@ -78,12 +87,12 @@ const GoalsScreen = ({ navigation }) => {
   const handleAddGoal = async () => {
     // Validation
     if (!newGoalTitle.trim()) {
-      Alert.alert('Error', 'Please enter a goal title');
+      showWarningAlert('Error', 'Please enter a goal title');
       return;
     }
     
     if (!newGoalTarget || parseFloat(newGoalTarget) <= 0) {
-      Alert.alert('Error', 'Please enter a valid target amount greater than 0');
+      showWarningAlert('Error', 'Please enter a valid target amount greater than 0');
       return;
     }
 
@@ -94,7 +103,7 @@ const GoalsScreen = ({ navigation }) => {
         currentAmount: 0,
         category: newGoalCategory || 'General',
         priority: newGoalPriority,
-        deadline: newGoalDeadline || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+        deadline: hasDeadline && newGoalDeadline ? newGoalDeadline : null,
         description: `Save ₹${newGoalTarget} for ${newGoalTitle}`,
         createdAt: editingGoal ? editingGoal.createdAt : new Date().toISOString(),
         updatedAt: new Date().toISOString()
@@ -102,10 +111,10 @@ const GoalsScreen = ({ navigation }) => {
 
       if (editingGoal) {
         await updateGoal(editingGoal.id, goalData);
-        Alert.alert('Success', 'Goal updated successfully!');
+        showSuccessAlert('Success', 'Goal updated successfully!');
       } else {
         await saveGoal(goalData);
-        Alert.alert('Success', 'Goal created successfully!');
+        showSuccessAlert('Success', 'Goal created successfully!');
       }
 
       resetForm();
@@ -113,31 +122,31 @@ const GoalsScreen = ({ navigation }) => {
       loadGoals();
     } catch (error) {
       console.error('Error saving goal:', error);
-      Alert.alert('Error', 'Failed to save goal. Please try again.');
+      showErrorAlert('Error', 'Failed to save goal. Please try again.');
     }
   };
   const handleContribute = async () => {
     // Validation
     if (!contributionAmount || contributionAmount.trim() === '') {
-      Alert.alert('Error', 'Please enter an amount');
+      showWarningAlert('Error', 'Please enter an amount');
       return;
     }
     
     const amount = parseFloat(contributionAmount);
     if (isNaN(amount) || amount <= 0) {
-      Alert.alert('Error', 'Please enter a valid amount greater than 0');
+      showWarningAlert('Error', 'Please enter a valid amount greater than 0');
       return;
     }
 
     if (!selectedGoal) {
-      Alert.alert('Error', 'No goal selected');
+      showWarningAlert('Error', 'No goal selected');
       return;
     }
     
     // Check if contribution exceeds remaining amount
     const remaining = selectedGoal.targetAmount - selectedGoal.currentAmount;
     if (amount > remaining) {
-      Alert.alert(
+      showWarningAlert(
         'Amount Exceeds Target',
         `You're trying to add ₹${amount.toLocaleString('en-IN')} but only ₹${remaining.toLocaleString('en-IN')} is needed to reach the goal. Do you want to continue?`,
         [
@@ -154,14 +163,14 @@ const GoalsScreen = ({ navigation }) => {
   const proceedWithContribution = async (amount) => {
     try {
       await addToGoal(selectedGoal.id, amount);
-      Alert.alert('Success', `₹${amount.toLocaleString('en-IN')} added to ${selectedGoal.title}!`);
+      showSuccessAlert('Success', `₹${amount.toLocaleString('en-IN')} added to ${selectedGoal.title}!`);
       setContributionAmount('');
       setShowContribute(false);
       setSelectedGoal(null);
       loadGoals();
     } catch (error) {
       console.error('Error adding contribution:', error);
-      Alert.alert('Error', 'Failed to add contribution. Please try again.');
+      showErrorAlert('Error', 'Failed to add contribution. Please try again.');
     }
   };
 
@@ -171,12 +180,16 @@ const GoalsScreen = ({ navigation }) => {
     setNewGoalTarget(goal.targetAmount.toString());
     setNewGoalCategory(goal.category);
     setNewGoalPriority(goal.priority);
-    setNewGoalDeadline(goal.deadline);
+    setNewGoalDeadline(goal.deadline || '');
+    setHasDeadline(!!goal.deadline);
+    if (goal.deadline) {
+      setSelectedDate(new Date(goal.deadline));
+    }
     setShowAddGoal(true);
   };
 
   const handleDeleteGoal = (goal) => {
-    Alert.alert(
+    showWarningAlert(
       'Delete Goal',
       `Are you sure you want to delete "${goal.title}"?`,
       [
@@ -187,10 +200,10 @@ const GoalsScreen = ({ navigation }) => {
           onPress: async () => {
             try {
               await deleteGoal(goal.id);
-              Alert.alert('Success', 'Goal deleted successfully');
+              showSuccessAlert('Success', 'Goal deleted successfully');
               loadGoals();
             } catch (error) {
-              Alert.alert('Error', 'Failed to delete goal');
+              showErrorAlert('Error', 'Failed to delete goal');
             }
           },
         },
@@ -202,6 +215,8 @@ const GoalsScreen = ({ navigation }) => {
     setNewGoalCategory('');
     setNewGoalPriority('medium');
     setNewGoalDeadline('');
+    setHasDeadline(false);
+    setSelectedDate(new Date());
     setEditingGoal(null);
     setShowAddGoal(false);
   };
@@ -245,6 +260,7 @@ const GoalsScreen = ({ navigation }) => {
   };
 
   const formatDaysLeft = (days) => {
+    if (days === null) return 'No deadline';
     if (days < 0) return 'Overdue';
     if (days === 0) return 'Due today';
     if (days === 1) return '1 day left';
@@ -331,19 +347,23 @@ const GoalsScreen = ({ navigation }) => {
           <View style={styles.statItem}>
             <View style={[
               styles.statIconContainer, 
-              { backgroundColor: goal.daysLeft < 30 ? '#fef2f2' : '#eff6ff' }
+              { 
+                backgroundColor: goal.daysLeft === null ? '#f3f4f6' : 
+                                goal.daysLeft < 30 ? '#fef2f2' : '#eff6ff' 
+              }
             ]}>
               <Ionicons 
                 name="time-outline" 
                 size={14} 
-                color={goal.daysLeft < 30 ? '#dc2626' : '#2563eb'} 
+                color={goal.daysLeft === null ? '#6b7280' :
+                      goal.daysLeft < 30 ? '#dc2626' : '#2563eb'} 
               />
             </View>
             <View style={styles.statInfo}>
               <Text style={styles.statLabel}>Timeline</Text>
               <Text style={[
                 styles.statValue,
-                goal.daysLeft < 30 && styles.urgentText
+                goal.daysLeft !== null && goal.daysLeft < 30 && styles.urgentText
               ]}>
                 {formatDaysLeft(goal.daysLeft)}
               </Text>
@@ -359,7 +379,7 @@ const GoalsScreen = ({ navigation }) => {
             ]}
             onPress={() => {
               if (goal.progressPercentage >= 100) {
-                Alert.alert(
+                showSuccessAlert(
                   'Goal Completed!',
                   `Congratulations! You've already reached your goal of ₹${goal.targetAmount.toLocaleString('en-IN')} for ${goal.title}.`,
                   [{ text: 'OK' }]
@@ -477,12 +497,6 @@ const GoalsScreen = ({ navigation }) => {
           </View>
           
           <View style={styles.headerRight}>
-            <TouchableOpacity 
-              style={styles.headerButton}
-              onPress={() => navigation.navigate('Notifications')}
-            >
-              <Ionicons name="notifications-outline" size={20} color="white" />
-            </TouchableOpacity>
             <TouchableOpacity 
               style={styles.headerButton}
               onPress={() => setShowAddGoal(true)}
@@ -634,6 +648,58 @@ const GoalsScreen = ({ navigation }) => {
                   ))}
                 </View>
               </View>
+              
+              {/* Deadline Section */}
+              <View style={styles.deadlineSection}>
+                <View style={styles.deadlineHeader}>
+                  <Text style={styles.inputLabel}>Set Deadline (Optional)</Text>
+                  <TouchableOpacity
+                    style={styles.deadlineToggle}
+                    onPress={() => setHasDeadline(!hasDeadline)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[
+                      styles.toggleSwitch,
+                      hasDeadline && styles.toggleSwitchActive
+                    ]}>
+                      <View style={[
+                        styles.toggleThumb,
+                        hasDeadline && styles.toggleThumbActive
+                      ]} />
+                    </View>
+                    <Text style={[
+                      styles.toggleText,
+                      hasDeadline && styles.toggleTextActive
+                    ]}>
+                      {hasDeadline ? 'Enabled' : 'Disabled'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                
+                {hasDeadline && (
+                  <TouchableOpacity
+                    style={styles.dateSelector}
+                    onPress={() => setShowDatePicker(true)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.dateSelectorContent}>
+                      <Ionicons name="calendar-outline" size={20} color={colors.primary.main} />
+                      <Text style={styles.dateSelectorText}>
+                        {newGoalDeadline ? 
+                          new Date(newGoalDeadline).toLocaleDateString('en-US', {
+                            weekday: 'long',
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric'
+                          }) : 
+                          'Select target date'
+                        }
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color={colors.text.secondary} />
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
             
             <View style={styles.modalButtons}>
@@ -669,6 +735,70 @@ const GoalsScreen = ({ navigation }) => {
             </View>
           </View>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Date Picker Modal */}
+      <Modal
+        visible={showDatePicker}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowDatePicker(false)}
+      >
+        <View style={styles.datePickerOverlay}>
+          <View style={styles.datePickerContainer}>
+            <View style={styles.datePickerHeader}>
+              <Text style={styles.datePickerTitle}>Select Target Date</Text>
+              <TouchableOpacity
+                style={styles.datePickerClose}
+                onPress={() => setShowDatePicker(false)}
+              >
+                <Ionicons name="close" size={24} color={colors.text.secondary} />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.datePickerContent}>
+              <Text style={styles.datePickerLabel}>Choose your goal deadline:</Text>
+              
+              <View style={styles.dateOptions}>
+                {/* Quick date options */}
+                {[
+                  { label: '1 Month', days: 30 },
+                  { label: '3 Months', days: 90 },
+                  { label: '6 Months', days: 180 },
+                  { label: '1 Year', days: 365 },
+                ].map((option) => {
+                  const targetDate = new Date();
+                  targetDate.setDate(targetDate.getDate() + option.days);
+                  
+                  return (
+                    <TouchableOpacity
+                      key={option.label}
+                      style={styles.dateOption}
+                      onPress={() => {
+                        setSelectedDate(targetDate);
+                        setNewGoalDeadline(targetDate.toISOString());
+                        setShowDatePicker(false);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.dateOptionContent}>
+                        <Text style={styles.dateOptionLabel}>{option.label}</Text>
+                        <Text style={styles.dateOptionDate}>
+                          {targetDate.toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric'
+                          })}
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={16} color={colors.text.secondary} />
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          </View>
+        </View>
       </Modal>
 
       {/* Contribute Modal */}
@@ -1118,7 +1248,7 @@ const styles = StyleSheet.create({  container: {
     backgroundColor: 'white',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    maxHeight: '90%',
+    height: '97%',
     paddingBottom: 20,
   },
   modalHeader: {
@@ -1294,6 +1424,147 @@ const styles = StyleSheet.create({  container: {
     backgroundColor: '#f1f5f9',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  deadlineSection: {
+    marginTop: 16,
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: colors.neutral[50],
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+  },
+  deadlineHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  deadlineToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  toggleSwitch: {
+    width: 44,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.neutral[300],
+    padding: 2,
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  toggleSwitchActive: {
+    backgroundColor: colors.primary.main,
+  },
+  toggleThumb: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'white',
+    alignSelf: 'flex-start',
+  },
+  toggleThumbActive: {
+    alignSelf: 'flex-end',
+  },
+  toggleText: {
+    fontSize: 14,
+    color: colors.text.secondary,
+    fontWeight: '500',
+  },
+  toggleTextActive: {
+    color: colors.primary.main,
+    fontWeight: '600',
+  },
+  dateSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 14,
+    backgroundColor: 'white',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+  },
+  dateSelectorContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  dateSelectorText: {
+    fontSize: 16,
+    color: colors.text.primary,
+    marginLeft: 8,
+  },
+  // Date Picker Modal Styles
+  datePickerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  datePickerContainer: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    width: '100%',
+    maxWidth: 400,
+  },
+  datePickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.neutral[200],
+  },
+  datePickerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.text.primary,
+  },
+  datePickerClose: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.neutral[100],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  datePickerContent: {
+    padding: 20,
+  },
+  datePickerLabel: {
+    fontSize: 16,
+    color: colors.text.secondary,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  dateOptions: {
+    marginBottom: 20,
+  },
+  dateOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    backgroundColor: colors.neutral[50],
+    borderRadius: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+  },
+  dateOptionContent: {
+    flex: 1,
+  },
+  dateOptionLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text.primary,
+    marginBottom: 4,
+  },
+  dateOptionDate: {
+    fontSize: 14,
+    color: colors.text.secondary,
   },
 });
 

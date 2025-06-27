@@ -17,6 +17,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { getSpendingAnalytics, getFinancialInsights } from '../services/dataService';
 import colors from '../utils/colors';
+import { 
+  showSuccessAlert, 
+  showErrorAlert, 
+  showWarningAlert, 
+  showInfoAlert 
+} from '../services/alertService';
 
 const { width } = Dimensions.get('window');
 

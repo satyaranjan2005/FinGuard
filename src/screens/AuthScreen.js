@@ -5,6 +5,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Button, Card, Input, Logo } from '../components';
 import { authService } from '../services/authService';
+import { 
+  showSuccessAlert, 
+  showErrorAlert, 
+  showWarningAlert, 
+  showInfoAlert 
+} from '../services/alertService';
 
 const AuthScreen = ({ onAuthSuccess }) => {
   const [isLogin, setIsLogin] = useState(true);
@@ -50,23 +56,23 @@ const AuthScreen = ({ onAuthSuccess }) => {
 
   const validateForm = () => {
     if (!email || !password) {
-      Alert.alert('Error', 'Please fill in all fields');
+      showWarningAlert('Error', 'Please fill in all fields');
       return false;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      Alert.alert('Error', 'Please enter a valid email address');
+      showWarningAlert('Error', 'Please enter a valid email address');
       return false;
     }
 
     if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters long');
+      showWarningAlert('Error', 'Password must be at least 6 characters long');
       return false;
     }
 
     if (!isLogin && password !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
+      showWarningAlert('Error', 'Passwords do not match');
       return false;
     }
 
@@ -87,7 +93,7 @@ const AuthScreen = ({ onAuthSuccess }) => {
 
       if (result.success) {
         if (biometricAvailable) {
-          Alert.alert(
+          showInfoAlert(
             'Biometric Authentication',
             'Would you like to enable biometric authentication for faster login?',
             [
@@ -104,10 +110,10 @@ const AuthScreen = ({ onAuthSuccess }) => {
         
         onAuthSuccess(result.user);
       } else {
-        Alert.alert('Error', result.error);
+        showErrorAlert('Error', result.error);
       }
     } catch (error) {
-      Alert.alert('Error', 'Authentication failed');
+      showErrorAlert('Error', 'Authentication failed');
     } finally {
       setLoading(false);
     }

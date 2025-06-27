@@ -3,7 +3,6 @@ export { default as Card } from './Card';
 export { default as Input } from './Input';
 export { default as StatCard } from './StatCard';
 export { default as Logo } from './Logo';
-export { default as ExpenseSummaryChart } from './ExpenseSummaryChart';
 export { default as TransactionItem } from './TransactionItem';
 export { default as FinancialTip } from './FinancialTip';
 export { default as ExpenseAnalysisSummary } from './ExpenseAnalysisSummary';

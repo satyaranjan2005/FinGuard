@@ -18,6 +18,12 @@ import TransactionItem from '../components/TransactionItem';
 import { TransactionSkeleton, CardSkeleton } from '../components/LoadingSkeleton';
 import { ExpenseAnalysisSummary, MonthlyBudgetCard } from '../components';
 import { colors } from '../utils/colors';
+import { 
+  showSuccessAlert, 
+  showErrorAlert, 
+  showWarningAlert, 
+  showInfoAlert 
+} from '../services/alertService';
 import {
 StyleSheet, 
 View, 

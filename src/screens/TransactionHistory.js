@@ -19,6 +19,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { fetchRecentTransactions, deleteTransaction as deleteTransactionService } from '../services/dataService';
 import colors from '../utils/colors';
 import { emitEvent, EVENTS } from '../utils/eventEmitter';
+import { 
+  showSuccessAlert, 
+  showErrorAlert, 
+  showWarningAlert, 
+  showInfoAlert 
+} from '../services/alertService';
 
 // Helper function to darken/lighten colors
 const shadeColor = (color, percent) => {
@@ -109,7 +115,7 @@ const TransactionHistory = ({ navigation, route }) => {
       }
     } catch (error) {
       console.error('Error loading transactions:', error);
-      Alert.alert('Error', 'Failed to load transactions. Please try again.');
+      showErrorAlert('Error', 'Failed to load transactions. Please try again.');
       setTransactions([]);
       setFilteredTransactions([]);
     } finally {
@@ -170,7 +176,7 @@ const clearFilters = () => {
 
   const deleteTransaction = async (transactionId) => {
     setModalVisible(false);
-    Alert.alert(
+    showWarningAlert(
       'Delete Transaction',
       'Are you sure you want to delete this transaction?',
       [
@@ -191,12 +197,12 @@ const clearFilters = () => {
               emitEvent(EVENTS.BALANCE_CHANGED);
               emitEvent(EVENTS.BUDGET_UPDATED, { forcedUpdate: true });
               
-              Alert.alert('Success', 'Transaction deleted successfully');
+              showSuccessAlert('Success', 'Transaction deleted successfully');
               // Reload transactions to reflect changes
               loadTransactions();
             } catch (error) {
               console.error('Error deleting transaction:', error);
-              Alert.alert('Error', 'Failed to delete transaction. Please try again.');
+              showErrorAlert('Error', 'Failed to delete transaction. Please try again.');
             }
           },
         },

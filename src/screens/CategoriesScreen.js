@@ -8,6 +8,12 @@ import { Button, Card, Input } from '../components';
 import { storageService } from '../services/storageService';
 import { fetchCategories, addCategory, updateCategory, deleteCategory } from '../services/dataService';
 import colors from '../utils/colors';
+import { 
+  showSuccessAlert, 
+  showErrorAlert, 
+  showWarningAlert, 
+  showInfoAlert 
+} from '../services/alertService';
 
 const CategoriesScreen = ({ navigation }) => {
   const [categories, setCategories] = useState([]);
@@ -48,7 +54,7 @@ const CategoriesScreen = ({ navigation }) => {
       setCategories(Array.isArray(categoriesData) ? categoriesData : []);
     } catch (error) {
       console.error('Load categories error:', error);
-      Alert.alert('Error', 'Failed to load categories');
+      showErrorAlert('Error', 'Failed to load categories');
       setCategories([]);
     } finally {
       setLoading(false);
@@ -62,24 +68,24 @@ const CategoriesScreen = ({ navigation }) => {
       setCategories(Array.isArray(categoriesData) ? categoriesData : []);
     } catch (error) {
       console.error('Refresh categories error:', error);
-      Alert.alert('Error', 'Failed to refresh categories');
+      showErrorAlert('Error', 'Failed to refresh categories');
     } finally {
       setRefreshing(false);
     }
   };
   const validateForm = () => {
     if (!newCategoryName.trim()) {
-      Alert.alert('Error', 'Please enter a category name');
+      showWarningAlert('Error', 'Please enter a category name');
       return false;
     }
 
     if (newCategoryName.trim().length < 2) {
-      Alert.alert('Error', 'Category name must be at least 2 characters long');
+      showWarningAlert('Error', 'Category name must be at least 2 characters long');
       return false;
     }
 
     if (newCategoryName.trim().length > 20) {
-      Alert.alert('Error', 'Category name cannot exceed 20 characters');
+      showWarningAlert('Error', 'Category name cannot exceed 20 characters');
       return false;
     }
 
@@ -91,7 +97,7 @@ const CategoriesScreen = ({ navigation }) => {
     );
 
     if (existingCategory) {
-      Alert.alert('Error', 'A category with this name already exists for this type');
+      showWarningAlert('Error', 'A category with this name already exists for this type');
       return false;
     }
 
@@ -111,18 +117,18 @@ const CategoriesScreen = ({ navigation }) => {
       if (editingCategory) {
         // Update existing category
         await updateCategory(editingCategory.id, categoryData);
-        Alert.alert('Success', 'Category updated successfully!');
+        showSuccessAlert('Success', 'Category updated successfully!');
       } else {
         // Add new category
         await addCategory(categoryData);
-        Alert.alert('Success', 'Category added successfully!');
+        showSuccessAlert('Success', 'Category added successfully!');
       }
 
       resetForm();
       loadCategories();
     } catch (error) {
       console.error('Save category error:', error);
-      Alert.alert('Error', error.message || 'Failed to save category');
+      showErrorAlert('Error', error.message || 'Failed to save category');
     }
   };
 
@@ -134,7 +140,7 @@ const CategoriesScreen = ({ navigation }) => {
     setSelectedColor(category.color);
     setShowAddCategory(true);
   };  const handleDeleteCategory = (categoryId, categoryName) => {
-    Alert.alert(
+    showWarningAlert(
       'Delete Category',
       `Are you sure you want to delete "${categoryName}"? This action cannot be undone.`,
       [
@@ -146,16 +152,16 @@ const CategoriesScreen = ({ navigation }) => {
             try {
               await deleteCategory(categoryId);
               loadCategories();
-              Alert.alert('Success', 'Category deleted successfully!');
+              showSuccessAlert('Success', 'Category deleted successfully!');
             } catch (error) {
               console.error('Delete category error:', error);
               if (error.message.includes('being used in transactions')) {
-                Alert.alert(
+                showWarningAlert(
                   'Cannot Delete Category', 
                   'This category is currently being used in transactions. Please remove or change the category in those transactions first.'
                 );
               } else {
-                Alert.alert('Error', error.message || 'Failed to delete category');
+                showErrorAlert('Error', error.message || 'Failed to delete category');
               }
             }
           }

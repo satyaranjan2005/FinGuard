@@ -3,13 +3,18 @@ import { View, Text, ScrollView, TouchableOpacity, Alert, StyleSheet, Dimensions
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ProgressChart } from 'react-native-chart-kit';
 import { useFocusEffect } from '@react-navigation/native';
 import { Button, Card, Input } from '../components';
 import { storageService } from '../services/storageService';
 import { fetchCategories, saveBudget, fetchBudgets, deleteBudget as deleteBudgetFromService, updateBudget, initializeAppData, fetchBudgetSummary } from '../services/dataService';
 import colors from '../utils/colors';
 import { addEventListener, removeEventListener, EVENTS } from '../utils/eventEmitter';
+import { 
+  showSuccessAlert, 
+  showErrorAlert, 
+  showWarningAlert, 
+  showInfoAlert 
+} from '../services/alertService';
 
 const BudgetScreen = ({ navigation }) => {  const [budgets, setBudgets] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -109,7 +114,7 @@ const fallbackCategories = [
       setTransactions(Array.isArray(transactionsData) ? transactionsData : []);
     } catch (error) {
       console.error('Load budget data error:', error);
-      Alert.alert('Error', 'Failed to load budget data');
+      showErrorAlert('Error', 'Failed to load budget data');
       setBudgets([]);
       setBudgetSummary(null);
       setCategories(fallbackCategories); // Use fallback on error
@@ -164,13 +169,13 @@ const fallbackCategories = [
     };
   };const addBudget = async () => {
     if (!newBudgetCategory || !newBudgetAmount || parseFloat(newBudgetAmount) <= 0) {
-      Alert.alert('Validation Error', 'Please select a category and enter a valid amount greater than 0');
+      showWarningAlert('Validation Error', 'Please select a category and enter a valid amount greater than 0');
       return;
     }
 
     const budgetAmount = parseFloat(newBudgetAmount);
     if (budgetAmount > 1000000) {
-      Alert.alert('Validation Error', 'Budget amount cannot exceed ₹10,00,000');
+      showWarningAlert('Validation Error', 'Budget amount cannot exceed ₹10,00,000');
       return;
     }
 
@@ -185,7 +190,7 @@ const fallbackCategories = [
       );
 
       if (existingBudget) {
-        Alert.alert('Budget Exists', 'A budget already exists for this category this month. You can edit the existing budget instead.');
+        showWarningAlert('Budget Exists', 'A budget already exists for this category this month. You can edit the existing budget instead.');
         return;
       }
     }
@@ -198,20 +203,20 @@ const fallbackCategories = [
           amount: budgetAmount,
           updatedAt: new Date().toISOString()
         });
-        Alert.alert('Success', 'Budget updated successfully!');
+        showSuccessAlert('Success', 'Budget updated successfully!');
       } else {
         // Create new budget
         await saveBudget({
           categoryId: newBudgetCategory,
           amount: budgetAmount,
         });
-        Alert.alert('Success', 'Budget created successfully!');
+        showSuccessAlert('Success', 'Budget created successfully!');
       }
         resetForm();
       // Don't call loadData() here as BUDGET_UPDATED event will handle it
     } catch (error) {
       console.error('Save budget error:', error);
-      Alert.alert('Error', error.message || (editingBudget ? 'Failed to update budget' : 'Failed to create budget'));
+      showErrorAlert('Error', error.message || (editingBudget ? 'Failed to update budget' : 'Failed to create budget'));
     }
   };
 
@@ -223,7 +228,7 @@ const fallbackCategories = [
   };
 
   const handleDeleteBudget = (budgetId) => {
-    Alert.alert(
+    showWarningAlert(
       'Delete Budget',
       'Are you sure you want to delete this budget?',
       [
@@ -233,10 +238,10 @@ const fallbackCategories = [
           style: 'destructive',
           onPress: async () => {            try {
               await deleteBudgetFromService(budgetId);
-              Alert.alert('Success', 'Budget deleted successfully');
+              showSuccessAlert('Success', 'Budget deleted successfully');
               // Don't call loadData() here as BUDGET_UPDATED event will handle it
             } catch (error) {
-              Alert.alert('Error', 'Failed to delete budget');
+              showErrorAlert('Error', 'Failed to delete budget');
             }
           }
         }
@@ -310,18 +315,6 @@ const fallbackCategories = [
             >
               <Ionicons name="refresh-outline" size={20} color="white" />
             </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.headerButton}
-              onPress={() => navigation.navigate('Notifications')}
-            >
-              <Ionicons name="notifications-outline" size={20} color="white" />
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.headerButton}
-              onPress={() => navigation.navigate('Categories')}
-            >
-              <Ionicons name="settings-outline" size={20} color="white" />
-            </TouchableOpacity>
           </View></View>
         <Text style={styles.headerSubtitle}>{currentMonth}</Text>
       </LinearGradient>
@@ -344,9 +337,6 @@ const fallbackCategories = [
             />
           }
         >
-          <View style={styles.content}>
-          </View>
-        
           {/* Overall Budget Summary */}
           <Card style={styles.overviewCard}>
             <LinearGradient
@@ -426,7 +416,7 @@ const fallbackCategories = [
                 style={styles.categorySelector}
                 onPress={() => {
                   if (getExpenseCategories().length === 0) {
-                    Alert.alert(
+                    showInfoAlert(
                       'No Categories',
                       'Please create some expense categories first to set up budgets.',
                       [
@@ -806,7 +796,7 @@ const styles = StyleSheet.create({
     paddingBottom: 120,
   },content: {
     paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingTop: 0,
     paddingBottom: 100,
   },
   summaryCard: {
@@ -858,6 +848,7 @@ const styles = StyleSheet.create({
   overviewCard: {
     marginBottom: 16,
     marginHorizontal: 16,
+    marginTop: 8,
     padding: 0,
     overflow: 'hidden',
     elevation: 8,
