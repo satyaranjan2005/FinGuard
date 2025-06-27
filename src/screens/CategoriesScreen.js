@@ -230,12 +230,6 @@ const CategoriesScreen = ({ navigation }) => {
           </View>          <View style={styles.headerRight}>
             <TouchableOpacity 
               style={styles.headerButton}
-              onPress={() => navigation.navigate('Add')}
-            >
-              <Ionicons name="add-outline" size={22} color="white" />
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.headerButton}
               onPress={() => navigation.navigate('Analytics')}
             >
               <Ionicons name="analytics-outline" size={22} color="white" />

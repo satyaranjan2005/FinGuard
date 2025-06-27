@@ -236,7 +236,7 @@ const getCategoryIcon = (category) => {
     education: 'school',
     investment: 'trending-up',
     savings: 'wallet',
-    utilities: 'home',
+    utilities: 'flash',
     travel: 'airplane',
     subscriptions: 'repeat',
     gifts: 'gift',
@@ -252,10 +252,17 @@ const getCategoryIcon = (category) => {
     maintenance: 'construct',
     childcare: 'people',
     beauty: 'cut',
+    // Income category mappings
+    salary: 'cash',
+    freelance: 'laptop',
+    business: 'briefcase',
+    bonus: 'gift',
+    housing: 'home',
+    health: 'fitness',
     other: 'apps',
   };
   // Return the specific icon or a category icon instead of ellipsis
-  return icons[category] || 'apps';
+  return icons[category?.toLowerCase()] || 'apps';
 };
 
 const getCategoryColor = (category) => {
@@ -286,10 +293,17 @@ const getCategoryColor = (category) => {
     maintenance: '#EE5A24',
     childcare: '#F78FB3',
     beauty: '#9980FA',
+    // Income category mappings
+    salary: '#059669',
+    freelance: '#0891b2',
+    business: '#dc2626',
+    bonus: '#16a34a',
+    housing: '#3b82f6',
+    health: '#14b8a6',
     other: '#636E72',
   };
   // Return the specific color or a nice default color
-  return colors[category] || '#636E72';
+  return colors[category?.toLowerCase()] || '#636E72';
 };
   const renderTransaction = ({ item, index }) => {
     const isIncome = item.type === 'income';
