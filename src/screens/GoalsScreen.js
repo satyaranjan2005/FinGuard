@@ -478,7 +478,7 @@ const GoalsScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />        <LinearGradient
+      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />        <LinearGradient
         colors={colors.gradients.goals}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}

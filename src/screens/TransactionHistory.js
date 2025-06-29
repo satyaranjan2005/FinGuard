@@ -429,7 +429,7 @@ const handleTransactionPress = (transaction) => {
 
 return (
   <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
-    <StatusBar barStyle="light-content" backgroundColor="#4F8EF7" />
+    <StatusBar barStyle="dark-content" backgroundColor="#4F8EF7" />
     
     {/* Modern gradient header */}
     <LinearGradient

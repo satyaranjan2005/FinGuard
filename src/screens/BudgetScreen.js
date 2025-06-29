@@ -296,7 +296,7 @@ const fallbackCategories = [
   const overview = getTotalBudgetOverview();
   const currentMonth = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });    return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
       {/* Header with modern design */}
       <LinearGradient
         colors={colors.gradients.budget}

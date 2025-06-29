@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Alert, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, Alert, TouchableOpacity, StyleSheet, ScrollView, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -126,6 +126,7 @@ const AuthScreen = ({ onAuthSuccess }) => {
   };
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
       <LinearGradient
         colors={['#3B82F6', '#1D4ED8']}
         style={styles.gradient}

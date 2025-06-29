@@ -104,7 +104,6 @@ export default function App() {
       ) : (
         <AuthScreen onAuthSuccess={handleAuthSuccess} />
       )}
-      <StatusBar style="auto" translucent/>
       
       {/* Global Custom Alert */}
       <CustomAlert

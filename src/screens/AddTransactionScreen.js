@@ -262,7 +262,7 @@ const AddTransactionScreen = ({ navigation, route }) => {
     setIsAmountFocused(false);
   };return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />      <LinearGradient
+      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />      <LinearGradient
         colors={['#4338ca', '#6366f1']}
         style={styles.header}
       >

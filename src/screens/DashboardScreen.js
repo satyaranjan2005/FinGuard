@@ -130,7 +130,7 @@ if (loading && !refreshing) {
 
 return (
   <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
-    <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+    <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
     {/* Modern blue gradient header with balance card */}
     <LinearGradient
       colors={colors.gradients.balance}

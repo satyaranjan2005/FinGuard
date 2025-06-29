@@ -307,7 +307,7 @@ const AnalyticsScreen = ({ navigation }) => {
     );
   }  return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
       {/* Header */}
       <LinearGradient
         colors={['#8b5cf6', '#7c3aed']}
