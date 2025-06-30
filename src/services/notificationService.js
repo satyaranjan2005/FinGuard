@@ -16,7 +16,6 @@ const STORAGE_KEYS = {
 const DEFAULT_SETTINGS = {
   budgetAlerts: true,
   goalReminders: true,
-  billReminders: true,
   weeklyReports: false,
   monthlyReports: true
 };
@@ -372,32 +371,6 @@ export const createGoalMilestone = async (goalName, percentage, remaining) => {
 };
 
 /**
- * Create income notification
- * @param {number} amount - Income amount
- * @param {string} source - Income source
- */
-export const createIncomeNotification = async (amount, source = 'account') => {
-  try {
-    const notification = {
-      title: 'Income Added',
-      message: `₹${amount.toFixed(2)} has been added to your ${source}`,
-      type: 'success',
-      icon: 'cash',
-      data: {
-        type: 'income_added',
-        amount,
-        source
-      }
-    };
-
-    return await addNotificationToHistory(notification);
-  } catch (error) {
-    console.error('Error creating income notification:', error);
-    return null;
-  }
-};
-
-/**
  * Create weekly/monthly report notification
  * @param {string} reportType - 'weekly' or 'monthly'
  * @param {Object} reportData - Report summary data
@@ -464,13 +437,6 @@ export const createTestNotification = async () => {
         type: 'warning',
         icon: 'warning',
         data: { type: 'test_budget_alert' }
-      },
-      {
-        title: 'Income Added',
-        message: 'Salary of ₹75,000 has been credited to your account',
-        type: 'success',
-        icon: 'cash',
-        data: { type: 'test_income' }
       },
       {
         title: 'Goal Progress',
@@ -545,6 +511,5 @@ export default {
   formatNotificationTime,
   createBudgetAlert,
   createGoalMilestone,
-  createIncomeNotification,
   createReportNotification
 };
