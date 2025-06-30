@@ -65,15 +65,22 @@ const TransactionHistory = ({ navigation, route }) => {
     loadTransactions();
   }, []);
 
-  // Handle route parameters for initial filtering (e.g., from BudgetScreen)
+  // Handle route parameters for initial filtering (e.g., from BudgetScreen or Dashboard)
   useEffect(() => {
     if (route?.params) {
-      const { categoryFilter, timeFilter } = route.params;
+      const { categoryFilter, timeFilter, highlightTransactionId, presetTransaction } = route.params;
       if (categoryFilter) {
         setSelectedCategoryFilter(categoryFilter);
       }
       if (timeFilter) {
         setSelectedTimeFilter(timeFilter);
+      }
+      // If a specific transaction is passed, show it in modal
+      if (presetTransaction && highlightTransactionId) {
+        setTimeout(() => {
+          setSelectedTransaction(presetTransaction);
+          setModalVisible(true);
+        }, 500); // Small delay to ensure screen transition is complete
       }
     }
   }, [route?.params]);
@@ -175,7 +182,7 @@ const clearFilters = () => {
 };
 
   const deleteTransaction = async (transactionId) => {
-    setModalVisible(false);
+    handleModalClose();
     showWarningAlert(
       'Delete Transaction',
       'Are you sure you want to delete this transaction?',
@@ -427,6 +434,18 @@ const handleTransactionPress = (transaction) => {
   setModalVisible(true);
 };
 
+const handleModalClose = () => {
+  setModalVisible(false);
+  setSelectedTransaction(null);
+  // Clear route parameters to prevent auto-reopening
+  if (route?.params?.highlightTransactionId) {
+    navigation.setParams({
+      highlightTransactionId: undefined,
+      presetTransaction: undefined
+    });
+  }
+};
+
 return (
   <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
     <StatusBar barStyle="dark-content" backgroundColor="#4F8EF7" />
@@ -511,7 +530,7 @@ return (
       animationType="slide"
       transparent={true}
       visible={modalVisible}
-      onRequestClose={() => setModalVisible(false)}
+      onRequestClose={handleModalClose}
     >
       <View style={styles.modalOverlay}>
         <View style={styles.modalContainer}>
@@ -537,7 +556,7 @@ return (
                   </View>
                   <TouchableOpacity
                     style={styles.modalCloseButton}
-                    onPress={() => setModalVisible(false)}
+                    onPress={handleModalClose}
                   >
                     <Ionicons name="close" size={24} color="#666" />
                   </TouchableOpacity>

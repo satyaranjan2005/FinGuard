@@ -118,6 +118,14 @@ export default function AppNavigator({ user, onLogout }) {
           component={NotificationScreen}
         />
         <Stack.Screen 
+          name="TransactionHistory" 
+          component={TransactionHistoryScreen}
+        />
+        <Stack.Screen 
+          name="AddTransaction" 
+          component={AddTransactionScreen}
+        />
+        <Stack.Screen 
           name="Goals" 
           component={GoalsScreen}
         />

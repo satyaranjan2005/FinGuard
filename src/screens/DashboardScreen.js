@@ -422,10 +422,7 @@ return (
               <TransactionItem 
                 key={transaction.id} 
                 transaction={transaction}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  navigation.navigate('TransactionHistory');
-                }}
+                disablePressEffect // Ensures no clickable effect if supported
               />
             ) : null
           )) : null
@@ -636,7 +633,10 @@ sectionContainer: {
   marginBottom: 24,
   backgroundColor: '#fff',
   borderRadius: 16,
-  padding: 20,
+  paddingTop: 20,
+  paddingBottom: 20,
+  paddingLeft: 12,
+  paddingRight: 12,
   shadowColor: '#000',
   shadowOffset: { width: 0, height: 2 },
   shadowOpacity: 0.08,

@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-const TransactionItem = React.memo(({ transaction, onPress }) => {
+const TransactionItem = React.memo(({ transaction, onPress, hideChevron }) => {
   // Enhanced check if transaction is defined before destructuring
   if (!transaction || typeof transaction !== 'object') {
     console.warn('Invalid transaction object provided to TransactionItem');
@@ -11,7 +11,8 @@ const TransactionItem = React.memo(({ transaction, onPress }) => {
   
   // Safely extract properties with defaults
   const { 
-    title = 'Unknown',
+    title = transaction.description || 'Unknown Transaction',
+    description = transaction.description || 'Unknown Transaction',
     amount = 0,
     type = 'expense',
     category = 'Other',
@@ -20,6 +21,9 @@ const TransactionItem = React.memo(({ transaction, onPress }) => {
     notes = '',
     categoryId = ''
   } = transaction;
+  
+  // Use description as the main display text if title is not available
+  const displayTitle = title !== 'Unknown Transaction' ? title : description;
   
   // Format date to readable string
   const formatDate = (dateObj) => {
@@ -115,19 +119,25 @@ const TransactionItem = React.memo(({ transaction, onPress }) => {
             onPress(transaction);
           }
         }}
+        activeOpacity={0.6}
       >
         <View style={[styles.iconContainer, { backgroundColor: getIconBackgroundColor() }]}>
           <Ionicons name={getIconName()} size={18} color={getIconColor()} />
         </View>
         
         <View style={styles.detailsContainer}>
-          <Text style={styles.title} numberOfLines={1}>{title || 'Unknown'}</Text>
+          <Text style={styles.title} numberOfLines={1}>{displayTitle}</Text>
           <Text style={styles.category}>{category || 'Other'} • {formatDate(date)}</Text>
         </View>
         
-        <Text style={[styles.amount, { color: getAmountColor() }]}>
-          {type === 'income' ? '+' : '-'}₹{Number(isNaN(amount) ? 0 : amount).toFixed(2)}
-        </Text>
+        <View style={styles.amountContainer}>
+          <Text style={[styles.amount, { color: getAmountColor() }]}>
+            {type === 'income' ? '+' : '-'}₹{Number(isNaN(amount) ? 0 : amount).toFixed(2)}
+          </Text>
+          {/* {!hideChevron && (
+            <Ionicons name="chevron-forward" size={16} color="#9E9E9E" style={styles.chevron} />
+          )} */}
+        </View>
       </TouchableOpacity>
     );
   } catch (error) {
@@ -143,6 +153,15 @@ const styles = StyleSheet.create({
     padding: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 16,
+    marginVertical: 2,
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   iconContainer: {
     width: 40,
@@ -165,9 +184,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#757575',
   },
+  amountContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   amount: {
     fontSize: 16,
     fontWeight: '600',
+    marginRight: 4,
+  },
+  chevron: {
+    opacity: 0.6,
   }
 });
 
