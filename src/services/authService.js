@@ -1,25 +1,41 @@
 import * as LocalAuthentication from 'expo-local-authentication';
-import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const AUTH_KEYS = {
-  USER_CREDENTIALS: 'user_credentials',
-  BIOMETRIC_ENABLED: 'biometric_enabled',
+  USER_REGISTERED: 'user_registered',
+  USER_DATA: 'user_data',
 };
 
 export const authService = {
   // Check if biometric authentication is available
   async isBiometricAvailable() {
-    const hasHardware = await LocalAuthentication.hasHardwareAsync();
-    const isEnrolled = await LocalAuthentication.isEnrolledAsync();
-    return hasHardware && isEnrolled;
+    try {
+      const hasHardware = await LocalAuthentication.hasHardwareAsync();
+      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+      return hasHardware && isEnrolled;
+    } catch (error) {
+      console.error('Biometric availability check error:', error);
+      return false;
+    }
+  },
+
+  // Get supported biometric types
+  async getSupportedBiometricTypes() {
+    try {
+      const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
+      return types;
+    } catch (error) {
+      console.error('Get biometric types error:', error);
+      return [];
+    }
   },
 
   // Authenticate with biometrics
-  async authenticateWithBiometrics() {
+  async authenticateWithBiometrics(promptMessage = 'Authenticate to access FinGuard') {
     try {
       const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: 'Authenticate to access FinGuard',
-        fallbackLabel: 'Use Password',
+        promptMessage,
+        disableDeviceFallback: false,
         cancelLabel: 'Cancel',
       });
       return result.success;
@@ -29,83 +45,86 @@ export const authService = {
     }
   },
 
-  // Save user credentials securely
-  async saveCredentials(email, password) {
+  // Check if user is registered
+  async isUserRegistered() {
     try {
-      const credentials = { email, password, createdAt: new Date().toISOString() };
-      await SecureStore.setItemAsync(AUTH_KEYS.USER_CREDENTIALS, JSON.stringify(credentials));
-      return true;
+      const registered = await AsyncStorage.getItem(AUTH_KEYS.USER_REGISTERED);
+      return registered === 'true';
     } catch (error) {
-      console.error('Save credentials error:', error);
+      console.error('Check user registration error:', error);
       return false;
     }
   },
 
-  // Get stored credentials
-  async getCredentials() {
+  // Register new user
+  async registerUser(userData = {}) {
     try {
-      const credentials = await SecureStore.getItemAsync(AUTH_KEYS.USER_CREDENTIALS);
-      return credentials ? JSON.parse(credentials) : null;
+      const defaultUserData = {
+        id: Date.now().toString(),
+        registeredAt: new Date().toISOString(),
+        name: 'User',
+        ...userData
+      };
+      
+      await AsyncStorage.setItem(AUTH_KEYS.USER_REGISTERED, 'true');
+      await AsyncStorage.setItem(AUTH_KEYS.USER_DATA, JSON.stringify(defaultUserData));
+      
+      return { success: true, user: defaultUserData };
     } catch (error) {
-      console.error('Get credentials error:', error);
+      console.error('User registration error:', error);
+      return { success: false, error: 'Registration failed' };
+    }
+  },
+
+  // Get user data
+  async getUserData() {
+    try {
+      const userData = await AsyncStorage.getItem(AUTH_KEYS.USER_DATA);
+      return userData ? JSON.parse(userData) : null;
+    } catch (error) {
+      console.error('Get user data error:', error);
       return null;
     }
   },
 
-  // Validate login
-  async login(email, password) {
-    const storedCredentials = await this.getCredentials();
-    if (storedCredentials && storedCredentials.email === email && storedCredentials.password === password) {
-      return { success: true, user: { email } };
-    }
-    return { success: false, error: 'Invalid credentials' };
-  },
-
-  // Register new user
-  async register(email, password) {
-    const existingCredentials = await this.getCredentials();
-    if (existingCredentials) {
-      return { success: false, error: 'User already exists' };
-    }
-    
-    const saved = await this.saveCredentials(email, password);
-    if (saved) {
-      return { success: true, user: { email } };
-    }
-    return { success: false, error: 'Registration failed' };
-  },
-
-  // Enable/disable biometric authentication
-  async setBiometricEnabled(enabled) {
+  // Update user data
+  async updateUserData(newData) {
     try {
-      await SecureStore.setItemAsync(AUTH_KEYS.BIOMETRIC_ENABLED, enabled.toString());
-      return true;
+      const currentData = await this.getUserData();
+      if (!currentData) {
+        return { success: false, error: 'User not found' };
+      }
+
+      const updatedData = { ...currentData, ...newData };
+      await AsyncStorage.setItem(AUTH_KEYS.USER_DATA, JSON.stringify(updatedData));
+      
+      return { success: true, user: updatedData };
     } catch (error) {
-      console.error('Set biometric enabled error:', error);
-      return false;
+      console.error('Update user data error:', error);
+      return { success: false, error: 'Update failed' };
     }
   },
 
-  // Check if biometric is enabled
-  async isBiometricEnabled() {
-    try {
-      const enabled = await SecureStore.getItemAsync(AUTH_KEYS.BIOMETRIC_ENABLED);
-      return enabled === 'true';
-    } catch (error) {
-      console.error('Check biometric enabled error:', error);
-      return false;
-    }
-  },
-
-  // Logout
+  // Logout (clear all user data)
   async logout() {
     try {
-      await SecureStore.deleteItemAsync(AUTH_KEYS.USER_CREDENTIALS);
-      await SecureStore.deleteItemAsync(AUTH_KEYS.BIOMETRIC_ENABLED);
-      return true;
+      await AsyncStorage.removeItem(AUTH_KEYS.USER_REGISTERED);
+      await AsyncStorage.removeItem(AUTH_KEYS.USER_DATA);
+      return { success: true };
     } catch (error) {
       console.error('Logout error:', error);
-      return false;
+      return { success: false, error: 'Logout failed' };
+    }
+  },
+
+  // Reset app data (for development/testing)
+  async resetAppData() {
+    try {
+      await AsyncStorage.clear();
+      return { success: true };
+    } catch (error) {
+      console.error('Reset app data error:', error);
+      return { success: false, error: 'Reset failed' };
     }
   },
 };

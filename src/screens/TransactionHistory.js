@@ -501,7 +501,11 @@ return (
     </LinearGradient>    {/* Transaction List with Heading */}    <View style={styles.transactionSection}>
       {filteredTransactions.length > 0 && (
         <View style={styles.transactionHeader}>
-          <Text style={styles.transactionHeading}>Recent Transactions</Text>
+          <Text style={styles.transactionHeading}>
+            {selectedCategoryFilter !== 'all' || selectedTimeFilter !== 'all'
+              ? `Filtered by${selectedCategoryFilter !== 'all' ? ` category: ${selectedCategoryFilter}` : ''}${selectedTimeFilter !== 'all' ? `${selectedCategoryFilter !== 'all' ? ', ' : ' '}time: ${selectedTimeFilter === '7days' ? 'Last 7 days' : selectedTimeFilter === '1month' ? 'Last 1 month' : selectedTimeFilter}` : ''}`
+              : 'Recent Transactions'}
+          </Text>
           <Text style={styles.transactionCount}>
             {filteredTransactions.length} transaction{filteredTransactions.length !== 1 ? 's' : ''}
           </Text>

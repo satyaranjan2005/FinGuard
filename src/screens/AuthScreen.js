@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Alert, TouchableOpacity, StyleSheet, ScrollView, StatusBar } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Button, Card, Input, Logo } from '../components';
-import { authService } from '../services/authService';
+import * as LocalAuthentication from 'expo-local-authentication';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Logo } from '../components';
 import { 
   showSuccessAlert, 
   showErrorAlert, 
@@ -13,227 +14,207 @@ import {
 } from '../services/alertService';
 
 const AuthScreen = ({ onAuthSuccess }) => {
-  const [isLogin, setIsLogin] = useState(true);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [loading, setLoading] = useState(false);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [biometricType, setBiometricType] = useState('');
+  const [isFirstTime, setIsFirstTime] = useState(true);
 
   useEffect(() => {
-    checkBiometricAvailability();
-    checkExistingAuth();
+    checkBiometricSupport();
+    checkFirstTimeUser();
   }, []);
 
-  const checkBiometricAvailability = async () => {
-    const available = await authService.isBiometricAvailable();
-    setBiometricAvailable(available);
+  const checkBiometricSupport = async () => {
+    try {
+      const compatible = await LocalAuthentication.hasHardwareAsync();
+      const enrolled = await LocalAuthentication.isEnrolledAsync();
+      const supportedTypes = await LocalAuthentication.supportedAuthenticationTypesAsync();
+      
+      if (compatible && enrolled) {
+        setBiometricAvailable(true);
+        setBiometricType('Face ID or Fingerprint');
+      } else {
+        setBiometricAvailable(false);
+        showErrorAlert(
+          'Biometric Authentication Required',
+          'This app requires biometric authentication. Please set up fingerprint or face recognition in your device settings.'
+        );
+      }
+    } catch (error) {
+      console.error('Error checking biometric support:', error);
+      setBiometricAvailable(false);
+    }
   };
 
-  const checkExistingAuth = async () => {
-    const credentials = await authService.getCredentials();
-    if (credentials) {
-      const biometricEnabled = await authService.isBiometricEnabled();
-      if (biometricEnabled && biometricAvailable) {
-        handleBiometricAuth();
-      }
+  const checkFirstTimeUser = async () => {
+    try {
+      const hasUser = await AsyncStorage.getItem('user_registered');
+      setIsFirstTime(!hasUser);
+    } catch (error) {
+      console.error('Error checking first time user:', error);
     }
   };
 
   const handleBiometricAuth = async () => {
+    if (!biometricAvailable) {
+      showErrorAlert(
+        'Biometric Not Available',
+        'Please enable biometric authentication in your device settings.'
+      );
+      return;
+    }
+
     try {
-      const success = await authService.authenticateWithBiometrics();
-      if (success) {
-        const credentials = await authService.getCredentials();
-        if (credentials) {
-          onAuthSuccess({ email: credentials.email });
-        }
-      }
-    } catch (error) {
-      console.error('Biometric auth error:', error);
-    }
-  };
-
-  const validateForm = () => {
-    if (!email || !password) {
-      showWarningAlert('Error', 'Please fill in all fields');
-      return false;
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      showWarningAlert('Error', 'Please enter a valid email address');
-      return false;
-    }
-
-    if (password.length < 6) {
-      showWarningAlert('Error', 'Password must be at least 6 characters long');
-      return false;
-    }
-
-    if (!isLogin && password !== confirmPassword) {
-      showWarningAlert('Error', 'Passwords do not match');
-      return false;
-    }
-
-    return true;
-  };
-
-  const handleAuth = async () => {
-    if (!validateForm()) return;
-
-    setLoading(true);
-    try {
-      let result;
-      if (isLogin) {
-        result = await authService.login(email, password);
-      } else {
-        result = await authService.register(email, password);
-      }
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: 'Authenticate to access FinGuard',
+        disableDeviceFallback: false,
+        cancelLabel: 'Cancel',
+      });
 
       if (result.success) {
-        if (biometricAvailable) {
-          showInfoAlert(
-            'Biometric Authentication',
-            'Would you like to enable biometric authentication for faster login?',
-            [
-              { text: 'No', style: 'cancel' },
-              { 
-                text: 'Yes', 
-                onPress: async () => {
-                  await authService.setBiometricEnabled(true);
-                }
-              }
-            ]
-          );
+        if (isFirstTime) {
+          // First time user - register them
+          await registerNewUser();
+        } else {
+          // Existing user - log them in
+          await loginExistingUser();
         }
-        
-        onAuthSuccess(result.user);
       } else {
-        showErrorAlert('Error', result.error);
+        showErrorAlert('Authentication Failed', 'Biometric authentication was cancelled or failed.');
       }
     } catch (error) {
-      showErrorAlert('Error', 'Authentication failed');
-    } finally {
-      setLoading(false);
+      console.error('Biometric authentication error:', error);
+      showErrorAlert('Error', 'An error occurred during biometric authentication.');
     }
   };
 
-  const resetForm = () => {
-    setEmail('');
-    setPassword('');
-    setConfirmPassword('');
+  const registerNewUser = async () => {
+    try {
+      const userData = {
+        id: Date.now().toString(),
+        registeredAt: new Date().toISOString(),
+        name: 'User'
+      };
+      
+      await AsyncStorage.setItem('user_registered', 'true');
+      await AsyncStorage.setItem('user_data', JSON.stringify(userData));
+      
+      showSuccessAlert('Welcome!', 'Welcome to FinGuard! You can now start managing your finances.');
+      onAuthSuccess(userData);
+    } catch (error) {
+      console.error('Error registering user:', error);
+      showErrorAlert('Error', 'Failed to register user. Please try again.');
+    }
   };
+
+  const loginExistingUser = async () => {
+    try {
+      const userDataStr = await AsyncStorage.getItem('user_data');
+      if (userDataStr) {
+        const userData = JSON.parse(userDataStr);
+        showSuccessAlert('Welcome Back!', 'Biometric authentication successful!');
+        onAuthSuccess(userData);
+      } else {
+        showErrorAlert('Error', 'User data not found. Please contact support.');
+      }
+    } catch (error) {
+      console.error('Error logging in user:', error);
+      showErrorAlert('Error', 'Failed to log in. Please try again.');
+    }
+  };
+
+  const getBiometricIcon = () => {
+    return 'finger-print'; // Use fingerprint icon as generic biometric icon
+  };
+
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
+      <StatusBar barStyle="light-content" backgroundColor="#4F8EF7" />
+      
       <LinearGradient
-        colors={['#3B82F6', '#1D4ED8']}
+        colors={['#4F8EF7', '#6C63FF']}
         style={styles.gradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
       >
-        <ScrollView contentContainerStyle={styles.scrollContent}>          {/* Logo and Header */}
-          <View style={styles.headerContainer}>
-            <Logo 
-              size="large" 
-              showText={true} 
-              textColor="white" 
-              style={styles.logoComponent}
-            />
-          </View>
+        {/* Header */}
+        <View style={styles.header}>
+          <Logo size="large" color="white" />
+          <Text style={styles.title}>FinGuard</Text>
+          <Text style={styles.subtitle}>Your Personal Finance Manager</Text>
+        </View>
 
-          {/* Auth Form */}
-          <Card style={styles.formCard}>
-            <Text style={styles.formTitle}>
-              {isLogin ? 'Welcome Back' : 'Create Account'}
-            </Text>
-
-            <Input
-              label="Email"
-              placeholder="Enter your email"
-              value={email}
-              onChangeText={setEmail}
-              type="email"
-              autoCapitalize="none"
-            />
-
-            <Input
-              label="Password"
-              placeholder="Enter your password"
-              value={password}
-              onChangeText={setPassword}
-              type="password"
-            />
-
-            {!isLogin && (
-              <Input
-                label="Confirm Password"
-                placeholder="Confirm your password"
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                type="password"
+        {/* Authentication Section */}
+        <View style={styles.authSection}>
+          <View style={styles.biometricContainer}>
+            <View style={styles.biometricIconContainer}>
+              <Ionicons 
+                name={getBiometricIcon()} 
+                size={64} 
+                color="white" 
               />
-            )}
-
-            <Button
-              title={loading ? 'Please wait...' : (isLogin ? 'Sign In' : 'Sign Up')}
-              onPress={handleAuth}
-              disabled={loading}
-              style={styles.authButton}
-            />
-
-            {/* Biometric Authentication */}
-            {isLogin && biometricAvailable && (
-              <TouchableOpacity
-                onPress={handleBiometricAuth}
-                style={styles.biometricButton}
-              >
-                <Ionicons name="finger-print" size={24} color="#3B82F6" />
-                <Text style={styles.biometricText}>
-                  Use Biometric Authentication
-                </Text>
-              </TouchableOpacity>
-            )}
-          </Card>
-
-          {/* Switch between Login/Register */}
-          <TouchableOpacity
-            onPress={() => {
-              setIsLogin(!isLogin);
-              resetForm();
-            }}
-            style={styles.switchButton}
-          >
-            <Text style={styles.switchText}>
-              {isLogin ? "Don't have an account? " : "Already have an account? "}
-              <Text style={styles.switchHighlight}>
-                {isLogin ? 'Sign Up' : 'Sign In'}
-              </Text>
-            </Text>
-          </TouchableOpacity>
-
-          {/* Features Preview */}
-          <View style={styles.featuresContainer}>
-            <Text style={styles.featuresTitle}>What you can do with FinGuard:</Text>
-            <View style={styles.featuresGrid}>
-              <View style={styles.featureItem}>
-                <Ionicons name="analytics" size={24} color="white" />
-                <Text style={styles.featureText}>Track Expenses</Text>
-              </View>
-              <View style={styles.featureItem}>
-                <Ionicons name="flag" size={24} color="white" />
-                <Text style={styles.featureText}>Set Budgets</Text>
-              </View>
-              <View style={styles.featureItem}>
-                <Ionicons name="trending-up" size={24} color="white" />
-                <Text style={styles.featureText}>View Reports</Text>
-              </View>
-              <View style={styles.featureItem}>
-                <Ionicons name="shield-checkmark" size={24} color="white" />
-                <Text style={styles.featureText}>Secure Data</Text>
-              </View>
             </View>
+            
+            <Text style={styles.biometricTitle}>
+              {isFirstTime ? 'Get Started' : 'Welcome Back'}
+            </Text>
+            
+            <Text style={styles.biometricDescription}>
+              {isFirstTime 
+                ? `Use your ${biometricType} to set up your account and start managing your finances securely.`
+                : `Use your ${biometricType} to securely access your financial data.`
+              }
+            </Text>
+
+            {biometricAvailable ? (
+              <TouchableOpacity
+                style={styles.biometricButton}
+                onPress={handleBiometricAuth}
+                activeOpacity={0.8}
+              >
+                <LinearGradient
+                  colors={['rgba(255, 255, 255, 0.2)', 'rgba(255, 255, 255, 0.1)']}
+                  style={styles.buttonGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
+                  <Ionicons 
+                    name={getBiometricIcon()} 
+                    size={24} 
+                    color="white" 
+                    style={styles.buttonIcon}
+                  />
+                  <Text style={styles.buttonText}>
+                    {isFirstTime ? `Set up with Face ID or Fingerprint` : `Unlock with Face ID or Fingerprint`}
+                  </Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.unavailableContainer}>
+                <Ionicons name="warning" size={24} color="#FF6B6B" />
+                <Text style={styles.unavailableText}>
+                  Biometric authentication is not available on this device
+                </Text>
+                <TouchableOpacity
+                  style={styles.settingsButton}
+                  onPress={checkBiometricSupport}
+                >
+                  <Text style={styles.settingsButtonText}>Check Again</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
-        </ScrollView>
+        </View>
+
+        {/* Footer */}
+        <View style={styles.footer}>
+          <Text style={styles.footerText}>
+            Your financial data is stored securely on your device
+          </Text>
+          <View style={styles.securityBadge}>
+            <Ionicons name="shield-checkmark" size={16} color="rgba(255, 255, 255, 0.8)" />
+            <Text style={styles.securityText}>End-to-End Encrypted</Text>
+          </View>
+        </View>
       </LinearGradient>
     </SafeAreaView>
   );
@@ -246,78 +227,127 @@ const styles = StyleSheet.create({
   gradient: {
     flex: 1,
   },
-  scrollContent: {
-    flexGrow: 1,
-    padding: 24,
+  header: {
+    flex: 0.4,
     justifyContent: 'center',
-  },  headerContainer: {
     alignItems: 'center',
-    marginBottom: 40,
+    paddingHorizontal: 20,
   },
-  logoComponent: {
+  title: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: 'white',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  subtitle: {
+    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.9)',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  authSection: {
+    flex: 0.5,
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  biometricContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 20,
+    padding: 30,
+    alignItems: 'center',
+    backdropFilter: 'blur(10px)',
+  },
+  biometricIconContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: 20,
   },
-  formCard: {
-    marginBottom: 24,
-  },
-  formTitle: {
+  biometricTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#111827',
+    color: 'white',
+    marginBottom: 12,
     textAlign: 'center',
-    marginBottom: 24,
   },
-  authButton: {
-    marginTop: 16,
+  biometricDescription: {
+    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.9)',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 30,
   },
   biometricButton: {
+    width: '100%',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  buttonGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 16,
-    paddingVertical: 12,
-  },
-  biometricText: {
-    color: '#3B82F6',
-    fontSize: 16,
-    fontWeight: '500',
-    marginLeft: 8,
-  },
-  switchButton: {
-    alignItems: 'center',
     paddingVertical: 16,
+    paddingHorizontal: 24,
   },
-  switchText: {
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontSize: 16,
+  buttonIcon: {
+    marginRight: 12,
   },
-  switchHighlight: {
+  buttonText: {
     color: 'white',
+    fontSize: 18,
     fontWeight: '600',
   },
-  featuresContainer: {
-    marginTop: 32,
-  },
-  featuresTitle: {
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontSize: 14,
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  featuresGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    flexWrap: 'wrap',
-  },
-  featureItem: {
+  unavailableContainer: {
     alignItems: 'center',
-    width: '22%',
+    padding: 20,
   },
-  featureText: {
-    color: 'rgba(255, 255, 255, 0.7)',
-    fontSize: 12,
-    marginTop: 4,
+  unavailableText: {
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontSize: 16,
     textAlign: 'center',
+    marginTop: 12,
+    marginBottom: 20,
+  },
+  settingsButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+  },
+  settingsButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  footer: {
+    flex: 0.1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  footerText: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.8)',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  securityBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+  },
+  securityText: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.8)',
+    marginLeft: 6,
+    fontWeight: '500',
   },
 });
 

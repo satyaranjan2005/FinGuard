@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import AppNavigator from './src/navigation/AppNavigator';
 import AuthScreen from './src/screens/AuthScreen';
-import { authService } from './src/services/authService';
 import { initializeAppData } from './src/services/dataService';
 import { initializePermissions } from './src/services/permissionService';
 import { CustomAlert } from './src/components';
@@ -56,21 +56,12 @@ export default function App() {
 
   const checkAuthStatus = async () => {
     try {
-      const credentials = await authService.getCredentials();
-      if (credentials) {
-        const biometricEnabled = await authService.isBiometricEnabled();
-        const biometricAvailable = await authService.isBiometricAvailable();
-        
-        if (biometricEnabled && biometricAvailable) {
-          // Try biometric authentication
-          const success = await authService.authenticateWithBiometrics();
-          if (success) {
-            setUser({ email: credentials.email });
-            setIsAuthenticated(true);
-          }
-        } else {
-          // Auto-login with stored credentials
-          setUser({ email: credentials.email });
+      // Check if user is already registered
+      const userRegistered = await AsyncStorage.getItem('user_registered');
+      if (userRegistered) {
+        const userData = await AsyncStorage.getItem('user_data');
+        if (userData) {
+          setUser(JSON.parse(userData));
           setIsAuthenticated(true);
         }
       }
@@ -87,9 +78,15 @@ export default function App() {
   };
 
   const handleLogout = async () => {
-    await authService.logout();
-    setUser(null);
-    setIsAuthenticated(false);
+    try {
+      // Clear authentication data
+      await AsyncStorage.removeItem('user_registered');
+      await AsyncStorage.removeItem('user_data');
+      setUser(null);
+      setIsAuthenticated(false);
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   };
 
   if (isLoading) {
