@@ -9,27 +9,27 @@ A comprehensive React Native Expo application for managing personal finances on 
 ## 📱 App Screenshots
 
 ### Categories Management
-<img src="https://github.com/user-attachments/assets/categories-screen.png" width="300" alt="Categories Screen">
+<img src="./screenshots/IMG-20250710-WA0004.jpg" width="300" alt="Categories Screen">
 
 Manage your income and expense categories with custom icons and colors. Add, edit, or delete categories to match your financial habits.
 
 ### Transaction History
-<img src="https://github.com/user-attachments/assets/transaction-history.png" width="300" alt="Transaction History">
+<img src="./screenshots/IMG-20250710-WA0005.jpg" width="300" alt="Transaction History">
 
 View all your transactions with filtering options. See total income vs expenses at a glance and track your spending patterns over time.
 
 ### Add Transaction
-<img src="https://github.com/user-attachments/assets/add-transaction.png" width="300" alt="Add Transaction">
+<img src="./screenshots/IMG-20250710-WA0007.jpg" width="300" alt="Add Transaction">
 
 Easily add new income or expense transactions with category selection, amount input, and optional notes. The interface is intuitive and user-friendly.
 
 ### Analytics Dashboard
-<img src="https://github.com/user-attachments/assets/analytics-screen.png" width="300" alt="Analytics Screen">
+<img src="./screenshots/IMG-20250710-WA0009.jpg" width="300" alt="Analytics Screen">
 
 Get detailed insights into your financial health with savings rate, spending overview, and various metrics displayed in beautiful charts and cards.
 
 ### Financial Goals
-<img src="https://github.com/user-attachments/assets/goals-screen.png" width="300" alt="Goals Screen">
+<img src="./screenshots/IMG-20250710-WA0012.jpg" width="300" alt="Goals Screen">
 
 Set and track your financial goals with progress indicators. Monitor your savings progress and stay motivated to achieve your targets.
 
@@ -274,9 +274,9 @@ FinGuard/
 ## 📱 Download & Links
 
 ### Download APK
-- **Latest Release**: [Download FinGuard APK](https://github.com/satyaranjan2005/FinGuard/releases/latest)
+- **Latest Release**: [Download FinGuard APK](https://expo.dev/accounts/satyaranjan2005/projects/finguard/builds/0df466ca-9f21-4826-8c43-a50dcdf6d76a)
 - **System Requirements**: Android 5.0+ (API level 21)
-- **File Size**: ~50MB
+- **File Size**: ~82MB
 - **Installation**: Enable "Install from Unknown Sources" in Android settings
 
 ### Links
