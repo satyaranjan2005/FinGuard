@@ -1,4 +1,4 @@
-package com.anonymous.FinGaurd
+package com.anonymous.finguard
 
 import android.app.Application
 import android.content.res.Configuration

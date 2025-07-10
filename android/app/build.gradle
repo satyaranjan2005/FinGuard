@@ -87,9 +87,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.anonymous.FinGaurd'
+    namespace 'com.anonymous.finguard'
     defaultConfig {
-        applicationId 'com.anonymous.FinGaurd'
+        applicationId 'com.anonymous.finguard'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

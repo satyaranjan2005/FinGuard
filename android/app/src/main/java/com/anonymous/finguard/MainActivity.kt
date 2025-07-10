@@ -1,4 +1,4 @@
-package com.anonymous.FinGaurd
+package com.anonymous.finguard
 
 import android.os.Build
 import android.os.Bundle

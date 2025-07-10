@@ -1,14 +1,14 @@
 {
   "expo": {
     "name": "FinGuard",
-    "slug": "FinGaurd",
+    "slug": "finguard",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/icon.png",
+      "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -22,11 +22,11 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/icon.png",
+        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.anonymous.FinGuard",
+      "package": "com.anonymous.finguard",
       "permissions": [
         "WRITE_EXTERNAL_STORAGE",
         "READ_EXTERNAL_STORAGE",
@@ -43,7 +43,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/icon.png",
+          "icon": "./assets/notification-icon.png",
           "color": "#4F8EF7",
           "defaultChannel": "default"
         }
@@ -51,8 +51,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "775f5e86-98dc-4228-a621-e2ad08cc7d26"
+        "projectId": "da4ba51f-c610-48fc-9a60-7bd34be44864"
       }
-    }
+    },
+    "owner": "satyaranjan2005"
   }
 }
