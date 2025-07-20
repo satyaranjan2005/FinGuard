@@ -16,6 +16,7 @@ import {
   showWarningAlert,
   showConfirmationAlert 
 } from '../services/alertService';
+import { trackTransaction, trackAutopay, trackScreenView, EVENTS as ANALYTICS_EVENTS } from '../services/analyticsService';
 
 const AddTransactionScreen = ({ navigation, route }) => {
   const { transaction: editTransaction } = route?.params || {};
@@ -290,6 +291,9 @@ const AddTransactionScreen = ({ navigation, route }) => {
           console.log('Autopay transaction saved:', savedAutopay);
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           
+          // Track autopay creation
+          trackAutopay(ANALYTICS_EVENTS.AUTOPAY.CREATE, autopayData);
+          
           showSuccessAlert(
             'Autopay Created', 
             `Recurring ${transactionData.type} of ₹${transactionData.amount} scheduled successfully!`,
@@ -312,6 +316,9 @@ const AddTransactionScreen = ({ navigation, route }) => {
           const savedTransaction = await saveTransaction(transactionData);
           console.log('Transaction saved:', savedTransaction);
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          
+          // Track transaction creation
+          trackTransaction(ANALYTICS_EVENTS.TRANSACTION.CREATE, savedTransaction);
           
           // Refresh balance after successful transaction
           await loadCurrentBalance();

@@ -14,6 +14,7 @@
     },
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.nexify.finguard",
       "infoPlist": {
         "NSUserTrackingUsageDescription": "This app uses notifications to remind you about your financial goals and budget alerts.",
         "NSCameraUsageDescription": "This app uses the camera to scan receipts for expense tracking.",
@@ -29,7 +30,7 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.anonymous.finguard",
+      "package": "com.nexify.finguard",
       "permissions": [
         "WRITE_EXTERNAL_STORAGE",
         "READ_EXTERNAL_STORAGE",

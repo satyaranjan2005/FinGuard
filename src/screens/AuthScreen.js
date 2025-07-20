@@ -12,6 +12,7 @@ import {
   showWarningAlert, 
   showInfoAlert 
 } from '../services/alertService';
+import { trackAuth, EVENTS as ANALYTICS_EVENTS } from '../services/analyticsService';
 
 const AuthScreen = ({ onAuthSuccess }) => {
   const [biometricAvailable, setBiometricAvailable] = useState(false);
@@ -98,6 +99,9 @@ const AuthScreen = ({ onAuthSuccess }) => {
       await AsyncStorage.setItem('user_registered', 'true');
       await AsyncStorage.setItem('user_data', JSON.stringify(userData));
       
+      // Track user registration
+      trackAuth(ANALYTICS_EVENTS.AUTH.REGISTER, userData);
+      
       showSuccessAlert('Welcome!', 'Welcome to FinGuard! You can now start managing your finances.');
       onAuthSuccess(userData);
     } catch (error) {
@@ -111,6 +115,10 @@ const AuthScreen = ({ onAuthSuccess }) => {
       const userDataStr = await AsyncStorage.getItem('user_data');
       if (userDataStr) {
         const userData = JSON.parse(userDataStr);
+        
+        // Track user login
+        trackAuth(ANALYTICS_EVENTS.AUTH.LOGIN, userData);
+        
         showSuccessAlert('Welcome Back!', 'Biometric authentication successful!');
         onAuthSuccess(userData);
       } else {

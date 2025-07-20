@@ -15,6 +15,7 @@ import {
   showWarningAlert, 
   showInfoAlert 
 } from '../services/alertService';
+import { trackBudget, trackScreenView, EVENTS as ANALYTICS_EVENTS } from '../services/analyticsService';
 
 const BudgetScreen = ({ navigation }) => {  const [budgets, setBudgets] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -243,22 +244,35 @@ const fallbackCategories = [
     try {
       if (editingBudget) {
         // Update existing budget
-        await updateBudget(editingBudget.id, {
+        const updatedBudgetData = {
           categoryId: newBudgetCategory,
           amount: budgetAmount,
           period: newBudgetPeriod,
           autoReset: newBudgetAutoReset,
           updatedAt: new Date().toISOString()
+        };
+        await updateBudget(editingBudget.id, updatedBudgetData);
+        
+        // Track budget edit
+        trackBudget(ANALYTICS_EVENTS.BUDGET.EDIT, {
+          ...updatedBudgetData,
+          budgetId: editingBudget.id
         });
+        
         showSuccessAlert('Success', 'Budget updated successfully!');
       } else {
         // Create new budget
-        await saveBudget({
+        const newBudgetData = {
           categoryId: newBudgetCategory,
           amount: budgetAmount,
           period: newBudgetPeriod,
           autoReset: newBudgetAutoReset,
-        });
+        };
+        await saveBudget(newBudgetData);
+        
+        // Track budget creation
+        trackBudget(ANALYTICS_EVENTS.BUDGET.CREATE, newBudgetData);
+        
         showSuccessAlert('Success', 'Budget created successfully!');
       }
         resetForm();
@@ -288,7 +302,20 @@ const fallbackCategories = [
           text: 'Delete', 
           style: 'destructive',
           onPress: async () => {            try {
+              // Find the budget being deleted for analytics
+              const budgetToDelete = budgets.find(b => b.id === budgetId);
+              
               await deleteBudgetFromService(budgetId);
+              
+              // Track budget deletion
+              if (budgetToDelete) {
+                trackBudget(ANALYTICS_EVENTS.BUDGET.DELETE, {
+                  budgetId,
+                  category: budgetToDelete.categoryId,
+                  amount: budgetToDelete.amount
+                });
+              }
+              
               showSuccessAlert('Success', 'Budget deleted successfully');
               // Don't call loadData() here as BUDGET_UPDATED event will handle it
             } catch (error) {
@@ -311,7 +338,21 @@ const fallbackCategories = [
           style: 'default',
           onPress: async () => {
             try {
+              // Find the budget being reset for analytics
+              const budgetToReset = budgets.find(b => b.id === budgetId);
+              
               await resetBudget(budgetId);
+              
+              // Track budget reset
+              if (budgetToReset) {
+                trackBudget(ANALYTICS_EVENTS.BUDGET.RESET, {
+                  budgetId,
+                  category: budgetToReset.categoryId,
+                  amount: budgetToReset.amount,
+                  period: budgetToReset.period
+                });
+              }
+              
               showSuccessAlert('Success', 'Budget has been reset for a new period');
               // Don't call loadData() here as BUDGET_RESET event will handle it
             } catch (error) {

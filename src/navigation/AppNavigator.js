@@ -6,6 +6,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { trackScreenView, EVENTS } from '../services/analyticsService';
 
 import DashboardScreen from '../screens/DashboardScreen';
 import AddTransactionScreen from '../screens/AddTransactionScreen';
@@ -102,8 +103,40 @@ const TabNavigator = () => {
 };
 
 export default function AppNavigator({ user, onLogout }) {
+  const navigationRef = React.useRef();
+
+  // Track screen navigation
+  const onNavigationStateChange = (state) => {
+    if (!state) return;
+    
+    const getCurrentRouteName = (navigationState) => {
+      if (!navigationState.routes || navigationState.routes.length === 0) {
+        return null;
+      }
+      
+      const route = navigationState.routes[navigationState.index];
+      
+      if (route.state) {
+        return getCurrentRouteName(route.state);
+      }
+      
+      return route.name;
+    };
+    
+    const currentScreen = getCurrentRouteName(state);
+    if (currentScreen) {
+      trackScreenView(currentScreen.toLowerCase(), { 
+        user_authenticated: !!user,
+        timestamp: new Date().toISOString() 
+      });
+    }
+  };
+
   return (
-    <NavigationContainer>
+    <NavigationContainer
+      ref={navigationRef}
+      onStateChange={onNavigationStateChange}
+    >
       <Stack.Navigator
         screenOptions={{
           headerShown: false,
