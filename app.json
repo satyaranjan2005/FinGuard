@@ -18,6 +18,9 @@
         "NSUserTrackingUsageDescription": "This app uses notifications to remind you about your financial goals and budget alerts.",
         "NSCameraUsageDescription": "This app uses the camera to scan receipts for expense tracking.",
         "NSPhotoLibraryUsageDescription": "This app accesses your photo library to attach receipt images to transactions."
+      },
+      "runtimeVersion": {
+        "policy": "appVersion"
       }
     },
     "android": {
@@ -32,8 +35,14 @@
         "READ_EXTERNAL_STORAGE",
         "RECEIVE_BOOT_COMPLETED",
         "VIBRATE",
+        "WAKE_LOCK",
+        "WRITE_EXTERNAL_STORAGE",
+        "READ_EXTERNAL_STORAGE",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE",
         "WAKE_LOCK"
-      ]
+      ],
+      "runtimeVersion": "1.0.0"
     },
     "web": {
       "favicon": "./assets/icon.png"
@@ -54,6 +63,9 @@
         "projectId": "da4ba51f-c610-48fc-9a60-7bd34be44864"
       }
     },
-    "owner": "satyaranjan2005"
+    "owner": "satyaranjan2005",
+    "updates": {
+      "url": "https://u.expo.dev/da4ba51f-c610-48fc-9a60-7bd34be44864"
+    }
   }
 }

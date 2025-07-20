@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Alert, StyleSheet, ActivityIndicator, StatusBar, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
@@ -61,10 +62,17 @@ const AddTransactionScreen = ({ navigation, route }) => {
       console.log("Balance changed event received");
       loadCurrentBalance();
     });
+
+    const forceRefreshSubscription = addEventListener(EVENTS.FORCE_REFRESH_ALL, () => {
+      console.log("Force refresh event received in AddTransactionScreen");
+      loadCategories();
+      loadCurrentBalance();
+    });
     
     // Clean up subscription
     return () => {
       removeEventListener(balanceSubscription);
+      removeEventListener(forceRefreshSubscription);
     };
   }, []);
 
@@ -85,6 +93,16 @@ const AddTransactionScreen = ({ navigation, route }) => {
       setCategoryId('');
     }
   }, [type, isEditing]);
+
+  // Refresh data when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      console.log('AddTransactionScreen: Screen focused, refreshing data');
+      emitEvent(EVENTS.SCREEN_FOCUSED, { screen: 'AddTransaction' });
+      loadCategories();
+      loadCurrentBalance();
+    }, [])
+  );
   const loadCategories = async () => {
     setLoading(true);
     try {

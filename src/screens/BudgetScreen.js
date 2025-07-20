@@ -8,7 +8,7 @@ import { Button, Card, Input } from '../components';
 import { storageService } from '../services/storageService';
 import { fetchCategories, saveBudget, fetchBudgets, deleteBudget as deleteBudgetFromService, updateBudget, initializeAppData, fetchBudgetSummary } from '../services/dataService';
 import colors from '../utils/colors';
-import { addEventListener, removeEventListener, EVENTS } from '../utils/eventEmitter';
+import { addEventListener, removeEventListener, EVENTS, emitEvent } from '../utils/eventEmitter';
 import { 
   showSuccessAlert, 
   showErrorAlert, 
@@ -58,25 +58,27 @@ const fallbackCategories = [
       console.log("Transaction deleted event received in BudgetScreen");
       loadData();
     });
+
+    const forceRefreshSubscription = addEventListener(EVENTS.FORCE_REFRESH_ALL, () => {
+      console.log("Force refresh event received in BudgetScreen");
+      loadData();
+    });
     
     // Clean up subscriptions
     return () => {
       removeEventListener(budgetUpdateSubscription);
       removeEventListener(transactionAddedSubscription);
       removeEventListener(transactionDeletedSubscription);
+      removeEventListener(forceRefreshSubscription);
     };
-  }, []); // Empty dependency array since loadData is wrapped in useCallback  // Refresh data when screen comes into focus - optimized to prevent excessive reloads
+  }, []); // Empty dependency array since loadData is wrapped in useCallback  // Refresh data when screen comes into focus - enhanced with force refresh
   useFocusEffect(
     React.useCallback(() => {
-      console.log('BudgetScreen: Focus effect triggered - checking if reload needed');
-      // Only reload if screen has been away for a meaningful amount of time
-      // This prevents reloads when navigating back from quick modal interactions
-      const shouldReload = !isLoadingRef.current && (!lastLoadTimeRef.current || Date.now() - lastLoadTimeRef.current > 5000); // 5 second threshold
-      if (shouldReload) {
-        console.log('BudgetScreen: Reloading data due to focus effect');
-        loadData();
-      }
-    }, [loadData]) // Include loadData dependency since it's stable
+      console.log('BudgetScreen: Screen focused, refreshing data');
+      emitEvent(EVENTS.SCREEN_FOCUSED, { screen: 'Budget' });
+      // Always reload when screen comes into focus to ensure data is up-to-date
+      loadData();
+    }, [loadData])
   );// Load data function - wrapped in useCallback with debouncing to prevent excessive calls
   const loadData = React.useCallback(async () => {
     // Prevent rapid successive calls

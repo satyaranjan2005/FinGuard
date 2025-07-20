@@ -16,6 +16,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { getSpendingAnalytics, getFinancialInsights } from '../services/dataService';
+import { emitEvent, EVENTS } from '../utils/eventEmitter';
 import colors from '../utils/colors';
 import { 
   showSuccessAlert, 
@@ -45,6 +46,8 @@ const AnalyticsScreen = ({ navigation }) => {
   // Refresh data when screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
+      console.log('AnalyticsScreen: Screen focused, refreshing data');
+      emitEvent(EVENTS.SCREEN_FOCUSED, { screen: 'Analytics' });
       loadAnalytics();
     }, [selectedPeriod])
   );

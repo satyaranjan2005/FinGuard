@@ -11,6 +11,8 @@ export const EVENTS = {
   BUDGET_UPDATED: 'BUDGET_UPDATED',
   BALANCE_CHANGED: 'BALANCE_CHANGED',
   NOTIFICATION_ADDED: 'NOTIFICATION_ADDED',
+  FORCE_REFRESH_ALL: 'FORCE_REFRESH_ALL',
+  SCREEN_FOCUSED: 'SCREEN_FOCUSED',
 };
 
 // Emit event
@@ -27,4 +29,20 @@ export const addEventListener = (eventName, handler) => {
 // Unsubscribe from event
 export const removeEventListener = (subscription) => {
   subscription.remove();
+};
+
+// Global force refresh function to refresh all screens
+export const forceRefreshAllScreens = () => {
+  console.log('EventEmitter: Triggering force refresh for all screens');
+  emitEvent(EVENTS.FORCE_REFRESH_ALL);
+};
+
+// Navigation helper to trigger refresh when navigating to screens
+export const navigateAndRefresh = (navigation, screenName, params = {}) => {
+  console.log(`EventEmitter: Navigating to ${screenName} and triggering refresh`);
+  navigation.navigate(screenName, params);
+  // Small delay to ensure navigation completes before refresh
+  setTimeout(() => {
+    emitEvent(EVENTS.FORCE_REFRESH_ALL);
+  }, 100);
 };

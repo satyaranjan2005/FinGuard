@@ -564,12 +564,8 @@ export const deleteTransaction = async (transactionId) => {
     
     await AsyncStorage.setItem('transactions', JSON.stringify(transactions));
     
-    // Reverse the balance change
-    const reverseTransaction = {
-      ...deletedTransaction,
-      type: deletedTransaction.type === 'income' ? 'expense' : 'income'
-    };
-    await updateBalanceFromTransaction(reverseTransaction);
+    // Properly reverse the balance change
+    await reverseBalanceFromTransaction(deletedTransaction);
       // If the deleted transaction was an expense, update the budget
     if (deletedTransaction.type === 'expense' && deletedTransaction.categoryId) {
       // Create a negative transaction to subtract from the budget
@@ -584,15 +580,62 @@ export const deleteTransaction = async (transactionId) => {
     // Update the budget summary
     await updateBudgetSummary();
     
-    // Emit event for transaction deletion
-    emitEvent(EVENTS.TRANSACTION_DELETED, { 
-      transactionId, 
-      transaction: deletedTransaction
-    });
+    console.log(`Transaction ${transactionId} successfully deleted, all updates completed`);
+    
+    // Emit events after all operations are complete with a small delay
+    setTimeout(() => {
+      emitEvent(EVENTS.TRANSACTION_DELETED, { 
+        transactionId, 
+        transaction: deletedTransaction
+      });
+      emitEvent(EVENTS.BALANCE_CHANGED);
+      emitEvent(EVENTS.BUDGET_UPDATED, { forcedUpdate: true });
+    }, 10);
     
     return true;
   } catch (error) {
     console.error('Error deleting transaction:', error);
+    throw error;
+  }
+};
+
+/**
+ * Reverse user balance when a transaction is deleted
+ * @param {Object} transaction - The transaction that was deleted
+ */
+const reverseBalanceFromTransaction = async (transaction) => {
+  try {
+    // Get current user data
+    const storedData = await AsyncStorage.getItem('userData');
+    const userData = storedData ? JSON.parse(storedData) : SAMPLE_USER_DATA;
+    
+    // Reverse balance and monthly totals based on transaction type
+    if (transaction.type === 'income') {
+      userData.balance -= Number(transaction.amount);
+      userData.monthlyIncome -= Number(transaction.amount);
+      
+      // Ensure monthly income doesn't go negative
+      if (userData.monthlyIncome < 0) {
+        userData.monthlyIncome = 0;
+      }
+    } else if (transaction.type === 'expense') {
+      userData.balance += Number(transaction.amount);
+      userData.monthlyExpenses -= Number(transaction.amount);
+      
+      // Ensure monthly expenses doesn't go negative
+      if (userData.monthlyExpenses < 0) {
+        userData.monthlyExpenses = 0;
+      }
+    }
+    
+    // Save updated user data
+    await AsyncStorage.setItem('userData', JSON.stringify(userData));
+    
+    console.log(`Balance reversed: ${transaction.type} of ₹${transaction.amount}, New balance: ₹${userData.balance}, Monthly income: ₹${userData.monthlyIncome}, Monthly expenses: ₹${userData.monthlyExpenses}`);
+    
+    return userData;
+  } catch (error) {
+    console.error('Error reversing balance:', error);
     throw error;
   }
 };
@@ -1073,9 +1116,22 @@ export const getSpendingAnalytics = async (days = 30) => {
     
     // Category analysis
     const categorySpending = {};
+    
+    // Get categories for name lookup
+    const storedCategories = await AsyncStorage.getItem('categories');
+    const categories = storedCategories ? JSON.parse(storedCategories) : [];
+    
     expenseTransactions.forEach(t => {
-      const category = t.category || 'Other';
-      categorySpending[category] = (categorySpending[category] || 0) + (t.amount || 0);
+      // Use categoryId to find category name, fallback to category field if exists
+      let categoryName = 'Other';
+      if (t.categoryId) {
+        const categoryObj = categories.find(cat => cat.id === t.categoryId);
+        categoryName = categoryObj ? categoryObj.name : 'Other';
+      } else if (t.category) {
+        categoryName = t.category;
+      }
+      
+      categorySpending[categoryName] = (categorySpending[categoryName] || 0) + (t.amount || 0);
     });
       // Calculate percentages and sort categories
     const topCategories = Object.entries(categorySpending)
@@ -1134,10 +1190,24 @@ export const getFinancialInsights = async () => {
     
     // Category spending analysis
     const categorySpending = {};
+    
+    // Get categories for name lookup
+    const storedCategories = await AsyncStorage.getItem('categories');
+    const categories = storedCategories ? JSON.parse(storedCategories) : [];
+    
     transactions
       .filter(t => t.type === 'expense')
       .forEach(t => {
-        categorySpending[t.category] = (categorySpending[t.category] || 0) + t.amount;
+        // Use categoryId to find category name, fallback to category field if exists
+        let categoryName = 'Other';
+        if (t.categoryId) {
+          const categoryObj = categories.find(cat => cat.id === t.categoryId);
+          categoryName = categoryObj ? categoryObj.name : 'Other';
+        } else if (t.category) {
+          categoryName = t.category;
+        }
+        
+        categorySpending[categoryName] = (categorySpending[categoryName] || 0) + t.amount;
       });
     
     const topCategories = Object.entries(categorySpending)

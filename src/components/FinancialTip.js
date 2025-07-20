@@ -4,8 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 
 const FinancialTip = ({ tip, onClose }) => {
   const getTipIcon = (category) => {
-    switch (category) {
-      case 'savings': return 'piggy-bank';
+    switch (category?.toLowerCase()) {
+      case 'savings': return 'wallet';
       case 'investment': return 'trending-up';
       case 'budgeting': return 'calculator';
       case 'debt': return 'card';
@@ -14,7 +14,7 @@ const FinancialTip = ({ tip, onClose }) => {
   };
 
   const getTipColor = (category) => {
-    switch (category) {
+    switch (category?.toLowerCase()) {
       case 'savings': return '#10b981';
       case 'investment': return '#3b82f6';
       case 'budgeting': return '#f59e0b';
@@ -35,7 +35,7 @@ const FinancialTip = ({ tip, onClose }) => {
         </View>
         <View style={styles.tipTitleContainer}>
           <Text style={styles.tipTitle}>{tip.title}</Text>
-          <Text style={styles.tipCategory}>{tip.category.toUpperCase()}</Text>
+          <Text style={styles.tipCategory}>{(tip.category || 'General').toUpperCase()}</Text>
         </View>
         {onClose && (
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>

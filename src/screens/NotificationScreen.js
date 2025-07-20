@@ -27,7 +27,7 @@ import {
   formatNotificationTime
 } from '../services/notificationService';
 import { showPermissionSettingsAlert } from '../services/permissionService';
-import { addEventListener, removeEventListener, EVENTS } from '../utils/eventEmitter';
+import { addEventListener, removeEventListener, EVENTS, emitEvent } from '../utils/eventEmitter';
 import { 
   showSuccessAlert, 
   showErrorAlert, 
@@ -81,6 +81,8 @@ const NotificationScreen = ({ navigation }) => {
   // Load data when screen comes into focus
   useFocusEffect(
     useCallback(() => {
+      console.log('NotificationScreen: Screen focused, refreshing data');
+      emitEvent(EVENTS.SCREEN_FOCUSED, { screen: 'Notifications' });
       loadData();
     }, [loadData])
   );
@@ -92,8 +94,14 @@ const NotificationScreen = ({ navigation }) => {
       loadData();
     });
 
+    const forceRefreshSubscription = addEventListener(EVENTS.FORCE_REFRESH_ALL, () => {
+      console.log("Force refresh event received in NotificationScreen");
+      loadData();
+    });
+
     return () => {
       removeEventListener(subscription);
+      removeEventListener(forceRefreshSubscription);
     };
   }, [loadData]);
 

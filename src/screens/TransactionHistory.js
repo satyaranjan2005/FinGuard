@@ -16,9 +16,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { fetchRecentTransactions, deleteTransaction as deleteTransactionService } from '../services/dataService';
+import { fetchRecentTransactions, deleteTransaction as deleteTransactionService, fetchCategories } from '../services/dataService';
 import colors from '../utils/colors';
-import { emitEvent, EVENTS } from '../utils/eventEmitter';
+import { emitEvent, EVENTS, addEventListener, removeEventListener } from '../utils/eventEmitter';
 import { 
   showSuccessAlert, 
   showErrorAlert, 
@@ -60,9 +60,21 @@ const TransactionHistory = ({ navigation, route }) => {
   const [modalVisible, setModalVisible] = useState(false);
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [categories, setCategories] = useState([]);
+  const [categoriesData, setCategoriesData] = useState([]); // Store full category objects
   const [selectedTimeFilter, setSelectedTimeFilter] = useState('all');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('all');  useEffect(() => {
     loadTransactions();
+
+    // Subscribe to force refresh events
+    const forceRefreshSubscription = addEventListener(EVENTS.FORCE_REFRESH_ALL, () => {
+      console.log("Force refresh event received in TransactionHistory");
+      loadTransactions();
+    });
+
+    // Clean up subscription
+    return () => {
+      removeEventListener(forceRefreshSubscription);
+    };
   }, []);
 
   // Handle route parameters for initial filtering (e.g., from BudgetScreen or Dashboard)
@@ -92,14 +104,19 @@ const TransactionHistory = ({ navigation, route }) => {
   // Refresh data when screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
+      console.log('TransactionHistory: Screen focused, refreshing data');
+      emitEvent(EVENTS.SCREEN_FOCUSED, { screen: 'TransactionHistory' });
       loadTransactions();
     }, [])
   );
   const loadTransactions = async () => {
     try {
       setLoading(true);
-      // Fetch more transactions for better analysis
-      const transactionData = await fetchRecentTransactions(100);
+      // Fetch transactions and categories in parallel
+      const [transactionData, categoryData] = await Promise.all([
+        fetchRecentTransactions(100),
+        fetchCategories()
+      ]);
       
       if (Array.isArray(transactionData)) {
         // Sort by date (newest first) and ensure proper date parsing
@@ -112,9 +129,12 @@ const TransactionHistory = ({ navigation, route }) => {
         
         setTransactions(sortedTransactions);
         
-        // Extract unique categories
-        const uniqueCategories = [...new Set(sortedTransactions.map(t => t.category))];
+        // Extract unique categories for filtering
+        const uniqueCategories = [...new Set(sortedTransactions.map(t => getCategoryName(t, Array.isArray(categoryData) ? categoryData : [])))];
         setCategories(uniqueCategories);
+        
+        // Store full category data for icon lookup
+        setCategoriesData(Array.isArray(categoryData) ? categoryData : []);
       } else {
         console.warn('Invalid transaction data received');
         setTransactions([]);
@@ -158,7 +178,7 @@ const applyFilters = (transactionList) => {
   
   // Apply category filter
   if (selectedCategoryFilter !== 'all') {
-    filtered = filtered.filter(transaction => transaction.category === selectedCategoryFilter);
+    filtered = filtered.filter(transaction => getCategoryName(transaction, categoriesData) === selectedCategoryFilter);
   }
   
   setFilteredTransactions(filtered);
@@ -192,21 +212,25 @@ const clearFilters = () => {
           text: 'Delete',
           style: 'destructive',          onPress: async () => {
             try {
+              // Delete the transaction first
               await deleteTransactionService(transactionId);
+              
+              // Reload transactions immediately to reflect changes
+              await loadTransactions();
               
               // Ensure budgets are updated by directly importing and calling the function
               const { updateBudgetSummary } = require('../services/dataService');
               console.log('TransactionHistory: Manually updating budget summary after delete');
               await updateBudgetSummary();
               
-              // Broadcast that a transaction was deleted
-              emitEvent(EVENTS.TRANSACTION_DELETED, { transactionId });
-              emitEvent(EVENTS.BALANCE_CHANGED);
-              emitEvent(EVENTS.BUDGET_UPDATED, { forcedUpdate: true });
+              // Broadcast that a transaction was deleted with a slight delay to ensure all async operations complete
+              setTimeout(() => {
+                emitEvent(EVENTS.TRANSACTION_DELETED, { transactionId });
+                emitEvent(EVENTS.BALANCE_CHANGED);
+                emitEvent(EVENTS.BUDGET_UPDATED, { forcedUpdate: true });
+              }, 50);
               
               showSuccessAlert('Success', 'Transaction deleted successfully');
-              // Reload transactions to reflect changes
-              loadTransactions();
             } catch (error) {
               console.error('Error deleting transaction:', error);
               showErrorAlert('Error', 'Failed to delete transaction. Please try again.');
@@ -231,7 +255,16 @@ const formatDate = (dateString) => {
   });
 };
 
-const getCategoryIcon = (category) => {
+const getCategoryIcon = (transaction, categoriesData) => {
+  // First try to find the category by categoryId if it exists
+  if (transaction.categoryId && Array.isArray(categoriesData)) {
+    const categoryObj = categoriesData.find(cat => cat.id === transaction.categoryId);
+    if (categoryObj && categoryObj.icon) {
+      return categoryObj.icon;
+    }
+  }
+  
+  // Fallback to the hardcoded mapping based on category name
   const icons = {
     food: 'restaurant',
     transportation: 'car',
@@ -268,11 +301,64 @@ const getCategoryIcon = (category) => {
     health: 'fitness',
     other: 'apps',
   };
-  // Return the specific icon or a category icon instead of ellipsis
-  return icons[category?.toLowerCase()] || 'apps';
+  
+  // Get category name for icon lookup
+  const categoryName = getCategoryName(transaction, categoriesData);
+  return icons[categoryName?.toLowerCase()] || 'apps';
 };
 
-const getCategoryColor = (category) => {
+// Helper function for category name strings (used in filters)
+const getCategoryIconByName = (categoryName) => {
+  const icons = {
+    food: 'restaurant',
+    transportation: 'car',
+    shopping: 'bag',
+    entertainment: 'game-controller',
+    bills: 'receipt',
+    healthcare: 'medical',
+    income: 'cash',
+    education: 'school',
+    investment: 'trending-up',
+    savings: 'wallet',
+    utilities: 'flash',
+    travel: 'airplane',
+    subscriptions: 'repeat',
+    gifts: 'gift',
+    clothing: 'shirt',
+    technology: 'hardware-chip',
+    fitness: 'fitness',
+    personal: 'person',
+    household: 'home',
+    pets: 'paw',
+    charity: 'heart',
+    taxes: 'document-text',
+    insurance: 'shield-checkmark',
+    maintenance: 'construct',
+    childcare: 'people',
+    beauty: 'cut',
+    // Income category mappings
+    salary: 'cash',
+    freelance: 'laptop',
+    business: 'briefcase',
+    bonus: 'gift',
+    housing: 'home',
+    health: 'fitness',
+    other: 'apps',
+  };
+  
+  return icons[categoryName?.toLowerCase()] || 'apps';
+};
+
+const getCategoryColor = (transaction, categoriesData) => {
+  // First try to find the category by categoryId if it exists
+  if (transaction && transaction.categoryId && Array.isArray(categoriesData)) {
+    const categoryObj = categoriesData.find(cat => cat.id === transaction.categoryId);
+    if (categoryObj && categoryObj.color) {
+      return categoryObj.color;
+    }
+  }
+  
+  // Fallback to the hardcoded mapping based on category name
   const colors = {
     food: '#FF6B6B',
     transportation: '#4ECDC4',
@@ -309,12 +395,75 @@ const getCategoryColor = (category) => {
     health: '#14b8a6',
     other: '#636E72',
   };
-  // Return the specific color or a nice default color
-  return colors[category?.toLowerCase()] || '#636E72';
+  
+  // Get category name for color lookup
+  const categoryName = getCategoryName(transaction, categoriesData);
+  return colors[categoryName?.toLowerCase()] || '#636E72';
+};
+
+// Helper function for category name strings (used in filters) 
+const getCategoryColorByName = (categoryName) => {
+  const colors = {
+    food: '#FF6B6B',
+    transportation: '#4ECDC4',
+    shopping: '#45B7D1',
+    entertainment: '#9B59B6',
+    bills: '#F39C12',
+    healthcare: '#E74C3C',
+    income: '#27AE60',
+    education: '#3498DB',
+    investment: '#8E44AD',
+    savings: '#16A085',
+    utilities: '#E67E22',
+    travel: '#2ECC71',
+    subscriptions: '#6C5CE7',
+    gifts: '#FD79A8',
+    clothing: '#FDA7DF',
+    technology: '#0984E3',
+    fitness: '#00CEC9',
+    personal: '#6C5CE7',
+    household: '#74B9FF',
+    pets: '#A29BFE',
+    charity: '#D980FA',
+    taxes: '#C0392B',
+    insurance: '#3498DB',
+    maintenance: '#EE5A24',
+    childcare: '#F78FB3',
+    beauty: '#9980FA',
+    // Income category mappings
+    salary: '#059669',
+    freelance: '#0891b2',
+    business: '#dc2626',
+    bonus: '#16a34a',
+    housing: '#3b82f6',
+    health: '#14b8a6',
+    other: '#636E72',
+  };
+  
+  return colors[categoryName?.toLowerCase()] || '#636E72';
+};
+
+// Helper function to get category name from transaction
+const getCategoryName = (transaction, categoriesData) => {
+  // First try to find the category by categoryId if it exists
+  if (transaction && transaction.categoryId && Array.isArray(categoriesData)) {
+    const categoryObj = categoriesData.find(cat => cat.id === transaction.categoryId);
+    if (categoryObj && categoryObj.name) {
+      return categoryObj.name;
+    }
+  }
+  
+  // Fallback to the category field if it exists
+  if (transaction && transaction.category) {
+    return transaction.category;
+  }
+  
+  // Final fallback
+  return 'Unknown';
 };
   const renderTransaction = ({ item, index }) => {
     const isIncome = item.type === 'income';
-    const categoryColor = getCategoryColor(item.category);
+    const categoryColor = getCategoryColor(item, categoriesData);
     
     return (
       <TouchableOpacity 
@@ -338,7 +487,7 @@ const getCategoryColor = (category) => {
                 end={{ x: 1, y: 1 }}
               >
                 <Ionicons
-                  name={getCategoryIcon(item.category)}
+                  name={getCategoryIcon(item, categoriesData)}
                   size={24}
                   color="white"
                 />
@@ -351,7 +500,7 @@ const getCategoryColor = (category) => {
                   <View style={styles.metaRow}>
                   <View style={[styles.categoryChip, { backgroundColor: `${categoryColor}15` }]}>
                     <Text style={[styles.categoryChipText, { color: categoryColor }]}>
-                      {item.category?.charAt(0).toUpperCase() + item.category?.slice(1) || 'Other'}
+                      {getCategoryName(item, categoriesData)?.charAt(0).toUpperCase() + getCategoryName(item, categoriesData)?.slice(1) || 'Other'}
                     </Text>
                   </View>
                 </View>
@@ -550,12 +699,12 @@ return (
                 <View style={styles.modalHeaderTop}>
                   <View style={[
                     styles.modalIconContainer,
-                    { backgroundColor: `${getCategoryColor(selectedTransaction.category)}20` }
+                    { backgroundColor: `${getCategoryColor(selectedTransaction, categoriesData)}20` }
                   ]}>
                     <Ionicons
-                      name={getCategoryIcon(selectedTransaction.category)}
+                      name={getCategoryIcon(selectedTransaction, categoriesData)}
                       size={36}
-                      color={getCategoryColor(selectedTransaction.category)}
+                      color={getCategoryColor(selectedTransaction, categoriesData)}
                     />
                   </View>
                   <TouchableOpacity
@@ -594,19 +743,19 @@ return (
                     
                     <View style={[
                       styles.modalCategoryBadge,
-                      { backgroundColor: `${getCategoryColor(selectedTransaction.category)}15` }
+                      { backgroundColor: `${getCategoryColor(selectedTransaction, categoriesData)}15` }
                     ]}>
                       <Ionicons 
-                        name={getCategoryIcon(selectedTransaction.category)} 
+                        name={getCategoryIcon(selectedTransaction, categoriesData)} 
                         size={12} 
-                        color={getCategoryColor(selectedTransaction.category)}
+                        color={getCategoryColor(selectedTransaction, categoriesData)}
                         style={{ marginRight: 4 }}
                       />
                       <Text style={[
                         styles.modalCategoryText,
-                        { color: getCategoryColor(selectedTransaction.category) }
+                        { color: getCategoryColor(selectedTransaction, categoriesData) }
                       ]}>
-                        {selectedTransaction.category.charAt(0).toUpperCase() + selectedTransaction.category.slice(1)}
+                        {getCategoryName(selectedTransaction, categoriesData).charAt(0).toUpperCase() + getCategoryName(selectedTransaction, categoriesData).slice(1)}
                       </Text>
                     </View>
                   </View>
@@ -619,20 +768,20 @@ return (
                   <View style={styles.modalDetailRow}>
                   <View style={[
                     styles.modalDetailItem,
-                    { borderLeftColor: getCategoryColor(selectedTransaction.category) }
+                    { borderLeftColor: getCategoryColor(selectedTransaction, categoriesData) }
                   ]}>
                     <Ionicons
-                      name={getCategoryIcon(selectedTransaction.category)}
+                      name={getCategoryIcon(selectedTransaction, categoriesData)}
                       size={20} 
-                      color={getCategoryColor(selectedTransaction.category)} 
+                      color={getCategoryColor(selectedTransaction, categoriesData)} 
                     />
                     <View style={styles.modalDetailText}>
                       <Text style={styles.modalDetailLabel}>Category</Text>
                       <Text style={[
                         styles.modalDetailValue,
-                        { color: getCategoryColor(selectedTransaction.category) }
+                        { color: getCategoryColor(selectedTransaction, categoriesData) }
                       ]}>
-                        {selectedTransaction.category.charAt(0).toUpperCase() + selectedTransaction.category.slice(1)}
+                        {getCategoryName(selectedTransaction, categoriesData).charAt(0).toUpperCase() + getCategoryName(selectedTransaction, categoriesData).slice(1)}
                       </Text>
                     </View>
                   </View>
@@ -775,9 +924,9 @@ return (
                   >
                     <View style={styles.filterCategoryRow}>
                       <Ionicons 
-                        name={getCategoryIcon(category)} 
+                        name={getCategoryIconByName(category)} 
                         size={20} 
-                        color={getCategoryColor(category)} 
+                        color={getCategoryColorByName(category)} 
                         style={styles.filterCategoryIcon}
                       />
                       <Text style={[

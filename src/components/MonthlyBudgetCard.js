@@ -58,7 +58,7 @@ const MonthlyBudgetCard = ({ budgetData: propsBudgetData, onNavigate }) => {
           total: totalAllocated,
           spent: totalSpent,
           categories: budgetsList.map(budget => ({
-            name: budget.category,
+            name: budget.category || 'Unknown',
             allocated: budget.amount || 0,
             spent: budget.spent || 0,
             color: budget.color || '#4F8EF7',

@@ -7,6 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Button, Card, Input } from '../components';
 import { storageService } from '../services/storageService';
 import { fetchCategories, addCategory, updateCategory, deleteCategory } from '../services/dataService';
+import { emitEvent, EVENTS, addEventListener, removeEventListener } from '../utils/eventEmitter';
 import colors from '../utils/colors';
 import { 
   showSuccessAlert, 
@@ -40,11 +41,24 @@ const CategoriesScreen = ({ navigation }) => {
   ];
   useEffect(() => {
     loadCategories();
+
+    // Subscribe to force refresh events
+    const forceRefreshSubscription = addEventListener(EVENTS.FORCE_REFRESH_ALL, () => {
+      console.log("Force refresh event received in CategoriesScreen");
+      loadCategories();
+    });
+
+    // Clean up subscription
+    return () => {
+      removeEventListener(forceRefreshSubscription);
+    };
   }, []);
 
   // Reload categories when screen comes into focus
   useFocusEffect(
     useCallback(() => {
+      console.log('CategoriesScreen: Screen focused, refreshing data');
+      emitEvent(EVENTS.SCREEN_FOCUSED, { screen: 'Categories' });
       loadCategories();
     }, [])
   );  const loadCategories = async () => {

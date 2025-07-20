@@ -20,6 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { fetchGoals, saveGoal, addToGoal, updateGoal, deleteGoal } from '../services/dataService';
 import { storageService } from '../services/storageService';
+import { emitEvent, EVENTS, addEventListener, removeEventListener } from '../utils/eventEmitter';
 import colors from '../utils/colors';
 import { 
   showSuccessAlert, 
@@ -47,11 +48,24 @@ const GoalsScreen = ({ navigation }) => {
   const [editingGoal, setEditingGoal] = useState(null);
   useEffect(() => {
     loadGoals();
+
+    // Subscribe to force refresh events
+    const forceRefreshSubscription = addEventListener(EVENTS.FORCE_REFRESH_ALL, () => {
+      console.log("Force refresh event received in GoalsScreen");
+      loadGoals();
+    });
+
+    // Clean up subscription
+    return () => {
+      removeEventListener(forceRefreshSubscription);
+    };
   }, []);
 
   // Refresh data when screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
+      console.log('GoalsScreen: Screen focused, refreshing data');
+      emitEvent(EVENTS.SCREEN_FOCUSED, { screen: 'Goals' });
       loadGoals();
     }, [])
   );  const loadGoals = async () => {
@@ -178,7 +192,7 @@ const GoalsScreen = ({ navigation }) => {
     setEditingGoal(goal);
     setNewGoalTitle(goal.title);
     setNewGoalTarget(goal.targetAmount.toString());
-    setNewGoalCategory(goal.category);
+    setNewGoalCategory(goal.category || 'savings');
     setNewGoalPriority(goal.priority);
     setNewGoalDeadline(goal.deadline || '');
     setHasDeadline(!!goal.deadline);
@@ -283,7 +297,7 @@ const GoalsScreen = ({ navigation }) => {
             </View>
             <View style={styles.goalTitleInfo}>
               <Text style={styles.goalTitle} numberOfLines={1}>{goal.title}</Text>
-              <Text style={styles.goalCategory} numberOfLines={1}>{goal.category}</Text>
+              <Text style={styles.goalCategory} numberOfLines={1}>{goal.category || 'General'}</Text>
             </View>
           </View>
           

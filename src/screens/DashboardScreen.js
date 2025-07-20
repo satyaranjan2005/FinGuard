@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { FontAwesome5, MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { addEventListener, removeEventListener, EVENTS } from '../utils/eventEmitter';
+import { addEventListener, removeEventListener, EVENTS, emitEvent } from '../utils/eventEmitter';
 import { 
   fetchUserData, 
   fetchRecentTransactions, 
@@ -54,6 +55,8 @@ const fetchDashboardData = React.useCallback(async () => {
     setLoading(true);
     setError(null);
     
+    console.log('DashboardScreen: Starting to fetch dashboard data...');
+    
     // Fetch all dashboard data in parallel for better performance
     const [
       user,
@@ -75,6 +78,11 @@ const fetchDashboardData = React.useCallback(async () => {
       getFinancialInsights()
     ]);
     
+    console.log('DashboardScreen: Data fetched successfully, updating state...');
+    console.log('- User data:', user);
+    console.log('- Recent transactions count:', recentTransactions?.length || 0);
+    console.log('- Current balance:', balance);
+    
     setUserData(user);
     setTransactions(recentTransactions || []);
     setBudgetData(budgetSummary || { categories: [] });
@@ -83,6 +91,8 @@ const fetchDashboardData = React.useCallback(async () => {
     setGoals(goalsList || []);
     setSpendingAnalytics(analytics);
     setFinancialInsights(insights);
+    
+    console.log('DashboardScreen: State updated successfully');
     
   } catch (err) {
     setError('Failed to load dashboard data');
@@ -100,19 +110,60 @@ useEffect(() => {
   // Listen to relevant events with reduced frequency
   const transactionSubscription = addEventListener(EVENTS.TRANSACTION_ADDED, () => {
     console.log('DashboardScreen: Transaction added, refreshing data');
-    fetchDashboardData();
+    // Use setTimeout to ensure async operations complete
+    setTimeout(() => {
+      fetchDashboardData();
+    }, 100);
   });
   
   const transactionDeletedSubscription = addEventListener(EVENTS.TRANSACTION_DELETED, () => {
     console.log('DashboardScreen: Transaction deleted, refreshing data');
-    fetchDashboardData();
+    // Use setTimeout to ensure async operations complete
+    setTimeout(() => {
+      fetchDashboardData();
+    }, 100);
+  });
+
+  const balanceChangedSubscription = addEventListener(EVENTS.BALANCE_CHANGED, () => {
+    console.log('DashboardScreen: Balance changed, refreshing data');
+    // Use setTimeout to ensure async operations complete
+    setTimeout(() => {
+      fetchDashboardData();
+    }, 100);
+  });
+
+  const budgetUpdatedSubscription = addEventListener(EVENTS.BUDGET_UPDATED, () => {
+    console.log('DashboardScreen: Budget updated, refreshing data');
+    // Use setTimeout to ensure async operations complete
+    setTimeout(() => {
+      fetchDashboardData();
+    }, 100);
+  });
+
+  const forceRefreshSubscription = addEventListener(EVENTS.FORCE_REFRESH_ALL, () => {
+    console.log('DashboardScreen: Force refresh triggered');
+    setTimeout(() => {
+      fetchDashboardData();
+    }, 50);
   });
   
   return () => {
     removeEventListener(transactionSubscription);
     removeEventListener(transactionDeletedSubscription);
+    removeEventListener(balanceChangedSubscription);
+    removeEventListener(budgetUpdatedSubscription);
+    removeEventListener(forceRefreshSubscription);
   };
 }, []); // Empty dependency array to prevent recreation of event listeners
+
+// Add navigation focus effect to refresh data when screen comes into view
+useFocusEffect(
+  React.useCallback(() => {
+    console.log('DashboardScreen: Screen focused, refreshing data');
+    emitEvent(EVENTS.SCREEN_FOCUSED, { screen: 'Dashboard' });
+    fetchDashboardData();
+  }, [fetchDashboardData])
+);
 
 const onRefresh = () => {
   setRefreshing(true);
@@ -360,7 +411,7 @@ return (
               return (
                 <View key={budget.id} style={styles.budgetAlertItem}>
                   <View style={styles.budgetAlertHeader}>
-                    <Text style={styles.budgetAlertCategory}>{budget.category}</Text>
+                    <Text style={styles.budgetAlertCategory}>{budget.category || 'Unknown Category'}</Text>
                     <Text style={[
                       styles.budgetAlertPercentage,
                       { color: isOverBudget ? '#F44336' : '#FF9800' }
