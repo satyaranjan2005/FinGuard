@@ -243,19 +243,7 @@ return (
         </View>
       )}
         {/* Quick action buttons */}
-      <View style={styles.quickActions}>        <TouchableOpacity 
-          style={styles.actionButton}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            navigation.navigate('AddTransaction');
-          }}
-        >
-          <View style={styles.actionButtonIcon}>
-            <FontAwesome5 name="plus" size={16} color="#fff" />
-          </View>
-          <Text style={styles.actionButtonText}>Add Transaction</Text>
-        </TouchableOpacity>
-        
+      <View style={styles.quickActions}>        
         <TouchableOpacity 
           style={styles.actionButton}
           onPress={() => {
@@ -281,6 +269,19 @@ return (
           </View>
           <Text style={styles.actionButtonText}>Goals</Text>
         </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={styles.actionButton}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            navigation.navigate('AutopayManagement');
+          }}
+        >
+          <View style={[styles.actionButtonIcon, { backgroundColor: '#607D8B' }]}>
+            <FontAwesome5 name="sync-alt" size={16} color="#fff" />
+          </View>
+          <Text style={styles.actionButtonText}>Autopay</Text>
+        </TouchableOpacity>
           <TouchableOpacity 
           style={styles.actionButton}
           onPress={() => {
@@ -292,7 +293,8 @@ return (
             <FontAwesome5 name="chart-line" size={16} color="#fff" />
           </View>
           <Text style={styles.actionButtonText}>Analytics</Text>
-        </TouchableOpacity>      </View>      {/* Monthly Budget Section */}
+        </TouchableOpacity>
+      </View>      {/* Monthly Budget Section */}
       <View style={styles.sectionContainer}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Monthly Budget</Text>

@@ -236,10 +236,6 @@ const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
  */
 export const fetchUserData = async () => {
   try {
-    // In a real app, this would be an API call or AsyncStorage read
-    // For now, we'll simulate an API call with a small delay
-    await delay(500);
-    
     // Try to get data from storage, fall back to sample data
     const storedData = await AsyncStorage.getItem('userData');
     return storedData ? JSON.parse(storedData) : SAMPLE_USER_DATA;
@@ -256,8 +252,6 @@ export const fetchUserData = async () => {
  */
 export const fetchRecentTransactions = async (limit = 10) => {
   try {
-    await delay(700);
-    
     const storedTransactions = await AsyncStorage.getItem('transactions');
     const transactions = storedTransactions 
       ? JSON.parse(storedTransactions) 
@@ -477,6 +471,303 @@ export const saveTransaction = async (transaction) => {
   } catch (error) {
     console.error('Error saving transaction:', error);
     throw error;
+  }
+};
+
+/**
+ * Save an autopay (recurring) transaction
+ * @param {Object} autopayTransaction - Transaction data with autopay settings
+ * @returns {Promise<Object>} Saved autopay transaction
+ */
+export const saveAutopayTransaction = async (autopayTransaction) => {
+  try {
+    // Get existing autopay transactions
+    const storedAutopays = await AsyncStorage.getItem('autopayTransactions');
+    const autopays = storedAutopays ? JSON.parse(storedAutopays) : [];
+    
+    // Create new autopay entry
+    const newAutopay = {
+      ...autopayTransaction,
+      id: `ap${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      isActive: true,
+      nextExecutionDate: autopayTransaction.autopayStartDate,
+      executionCount: 0
+    };
+    
+    // Save to autopay list
+    const updatedAutopays = [newAutopay, ...autopays];
+    await AsyncStorage.setItem('autopayTransactions', JSON.stringify(updatedAutopays));
+    
+    // Schedule the first transaction if start date is today or in the past
+    const startDate = new Date(autopayTransaction.autopayStartDate);
+    const today = new Date();
+    
+    if (startDate <= today) {
+      // Create the first transaction immediately
+      const firstTransaction = {
+        ...autopayTransaction,
+        date: startDate.toISOString(),
+        autopayId: newAutopay.id,
+        isAutopayGenerated: true
+      };
+      
+      // Remove autopay-specific fields before saving as regular transaction
+      delete firstTransaction.isAutopay;
+      delete firstTransaction.autopayFrequency;
+      delete firstTransaction.autopayStartDate;
+      delete firstTransaction.autopayEndDate;
+      delete firstTransaction.autopayCount;
+      delete firstTransaction.nextExecutionDate;
+      
+      await saveTransaction(firstTransaction);
+      
+      // Update execution count and next execution date
+      newAutopay.executionCount = 1;
+      newAutopay.nextExecutionDate = calculateNextExecutionDate(
+        startDate, 
+        autopayTransaction.autopayFrequency
+      ).toISOString().split('T')[0];
+      
+      // Update the autopay record
+      updatedAutopays[0] = newAutopay;
+      await AsyncStorage.setItem('autopayTransactions', JSON.stringify(updatedAutopays));
+    }
+    
+    return newAutopay;
+  } catch (error) {
+    console.error('Error saving autopay transaction:', error);
+    throw error;
+  }
+};
+
+/**
+ * Calculate the next execution date based on frequency
+ * @param {Date} currentDate - Current execution date
+ * @param {string} frequency - 'daily', 'weekly', or 'monthly'
+ * @returns {Date} Next execution date
+ */
+const calculateNextExecutionDate = (currentDate, frequency) => {
+  const nextDate = new Date(currentDate);
+  
+  switch (frequency) {
+    case 'daily':
+      nextDate.setDate(nextDate.getDate() + 1);
+      break;
+    case 'weekly':
+      nextDate.setDate(nextDate.getDate() + 7);
+      break;
+    case 'monthly':
+      nextDate.setMonth(nextDate.getMonth() + 1);
+      break;
+    default:
+      nextDate.setMonth(nextDate.getMonth() + 1); // Default to monthly
+  }
+  
+  return nextDate;
+};
+
+/**
+ * Process pending autopay transactions
+ * This should be called on app startup or periodically
+ */
+export const processAutopayTransactions = async () => {
+  try {
+    const storedAutopays = await AsyncStorage.getItem('autopayTransactions');
+    const autopays = storedAutopays ? JSON.parse(storedAutopays) : [];
+    
+    const today = new Date();
+    const todayString = today.toISOString().split('T')[0];
+    
+    let hasUpdates = false;
+    
+    for (let i = 0; i < autopays.length; i++) {
+      const autopay = autopays[i];
+      
+      if (!autopay.isActive) continue;
+      
+      const nextExecutionDate = new Date(autopay.nextExecutionDate);
+      
+      // Check if it's time to execute
+      if (nextExecutionDate <= today) {
+        // Check if autopay should still be active
+        let shouldExecute = true;
+        
+        // Check end date
+        if (autopay.autopayEndDate) {
+          const endDate = new Date(autopay.autopayEndDate);
+          if (today > endDate) {
+            autopay.isActive = false;
+            shouldExecute = false;
+          }
+        }
+        
+        // Check execution count
+        if (autopay.autopayCount && autopay.executionCount >= autopay.autopayCount) {
+          autopay.isActive = false;
+          shouldExecute = false;
+        }
+        
+        if (shouldExecute) {
+          // Create the transaction
+          const newTransaction = {
+            description: autopay.description,
+            amount: autopay.amount,
+            type: autopay.type,
+            category: autopay.category,
+            categoryId: autopay.categoryId,
+            notes: autopay.notes + ' (Auto-generated)',
+            paymentMode: autopay.paymentMode,
+            date: nextExecutionDate.toISOString(),
+            autopayId: autopay.id,
+            isAutopayGenerated: true
+          };
+          
+          await saveTransaction(newTransaction);
+          
+          // Update autopay record
+          autopay.executionCount += 1;
+          autopay.nextExecutionDate = calculateNextExecutionDate(
+            nextExecutionDate, 
+            autopay.autopayFrequency
+          ).toISOString().split('T')[0];
+          
+          hasUpdates = true;
+        }
+      }
+    }
+    
+    // Save updated autopays if there were changes
+    if (hasUpdates) {
+      await AsyncStorage.setItem('autopayTransactions', JSON.stringify(autopays));
+    }
+    
+    return autopays.filter(ap => ap.isActive).length;
+  } catch (error) {
+    console.error('Error processing autopay transactions:', error);
+    return 0;
+  }
+};
+
+/**
+ * Process all scheduled tasks (autopays and budget resets)
+ * This should be called on app startup or periodically
+ * @returns {Promise<Object>} Processing results
+ */
+export const processScheduledTasks = async () => {
+  try {
+    console.log('Processing scheduled tasks...');
+    
+    // Process autopay transactions
+    const activeAutopays = await processAutopayTransactions();
+    
+    // Process expired budgets
+    const budgetResults = await processExpiredBudgets();
+    
+    const results = {
+      autopays: {
+        active: activeAutopays
+      },
+      budgets: budgetResults,
+      processedAt: new Date().toISOString()
+    };
+    
+    console.log('Scheduled tasks completed:', results);
+    return results;
+  } catch (error) {
+    console.error('Error processing scheduled tasks:', error);
+    return {
+      error: error.message,
+      processedAt: new Date().toISOString()
+    };
+  }
+};
+
+/**
+ * Get all autopay transactions
+ * @returns {Promise<Array>} Array of autopay transactions
+ */
+export const getAutopayTransactions = async () => {
+  try {
+    const storedAutopays = await AsyncStorage.getItem('autopayTransactions');
+    const autopays = storedAutopays ? JSON.parse(storedAutopays) : [];
+    console.log(`Retrieved ${autopays.length} autopay transactions from storage`);
+    return autopays;
+  } catch (error) {
+    console.error('Error getting autopay transactions:', error);
+    return [];
+  }
+};
+
+/**
+ * Disable an autopay transaction
+ * @param {string} autopayId - ID of autopay to disable
+ */
+export const disableAutopay = async (autopayId) => {
+  try {
+    console.log(`Attempting to disable autopay with ID: ${autopayId}`);
+    
+    const storedAutopays = await AsyncStorage.getItem('autopayTransactions');
+    const autopays = storedAutopays ? JSON.parse(storedAutopays) : [];
+    
+    console.log(`Found ${autopays.length} autopays in storage`);
+    
+    const autopayIndex = autopays.findIndex(ap => ap.id === autopayId);
+    if (autopayIndex !== -1) {
+      console.log(`Found autopay at index ${autopayIndex}, disabling...`);
+      const oldAutopay = { ...autopays[autopayIndex] };
+      
+      autopays[autopayIndex].isActive = false;
+      autopays[autopayIndex].disabledAt = new Date().toISOString();
+      
+      await AsyncStorage.setItem('autopayTransactions', JSON.stringify(autopays));
+      console.log('Autopay disabled and saved to storage');
+      
+      // Emit event to notify other parts of the app
+      emitEvent(EVENTS.AUTOPAY_DISABLED, { 
+        autopayId, 
+        autopay: autopays[autopayIndex],
+        oldAutopay 
+      });
+      
+      return autopays[autopayIndex];
+    } else {
+      console.log(`Autopay with ID ${autopayId} not found in ${autopays.length} autopays`);
+      throw new Error(`Autopay with ID ${autopayId} not found`);
+    }
+  } catch (error) {
+    console.error('Error disabling autopay:', error);
+    throw error;
+  }
+};
+
+/**
+ * Debug function to list all autopay transactions with their status
+ * @returns {Promise<Array>} Array of autopay transactions
+ */
+export const debugAutopays = async () => {
+  try {
+    const autopays = await getAutopayTransactions();
+    console.log('=== AUTOPAY DEBUG ===');
+    console.log(`Total autopays: ${autopays.length}`);
+    
+    autopays.forEach((autopay, index) => {
+      console.log(`Autopay ${index + 1}:`);
+      console.log(`  ID: ${autopay.id}`);
+      console.log(`  Active: ${autopay.isActive}`);
+      console.log(`  Amount: ₹${autopay.amount}`);
+      console.log(`  Type: ${autopay.type}`);
+      console.log(`  Frequency: ${autopay.autopayFrequency}`);
+      console.log(`  Next execution: ${autopay.nextExecutionDate}`);
+      console.log(`  Execution count: ${autopay.executionCount}`);
+      console.log('---');
+    });
+    
+    console.log('=== END AUTOPAY DEBUG ===');
+    return autopays;
+  } catch (error) {
+    console.error('Error in debugAutopays:', error);
+    return [];
   }
 };
 
@@ -957,6 +1248,38 @@ export const deleteCategory = async (categoryId) => {
 };
 
 /**
+ * Calculate budget expiry date based on period
+ * @param {string} period - 'daily', 'weekly', 'monthly', 'quarterly', 'yearly'
+ * @param {Date} startDate - Budget start date
+ * @returns {Date} Expiry date
+ */
+const calculateBudgetExpiry = (period, startDate = new Date()) => {
+  const expiryDate = new Date(startDate);
+  
+  switch (period) {
+    case 'daily':
+      expiryDate.setDate(expiryDate.getDate() + 1);
+      break;
+    case 'weekly':
+      expiryDate.setDate(expiryDate.getDate() + 7);
+      break;
+    case 'monthly':
+      expiryDate.setMonth(expiryDate.getMonth() + 1);
+      break;
+    case 'quarterly':
+      expiryDate.setMonth(expiryDate.getMonth() + 3);
+      break;
+    case 'yearly':
+      expiryDate.setFullYear(expiryDate.getFullYear() + 1);
+      break;
+    default:
+      expiryDate.setMonth(expiryDate.getMonth() + 1); // Default to monthly
+  }
+  
+  return expiryDate;
+};
+
+/**
  * Save or update a budget
  * @param {Object} budget - Budget object
  * @returns {Promise<Object>} Saved budget
@@ -966,11 +1289,17 @@ export const saveBudget = async (budget) => {
     const budgets = await fetchBudgets();
     const currentMonth = new Date().getMonth();
     const currentYear = new Date().getFullYear();
+    const now = new Date();
     
     // Find the category to get its name
     const storedCategories = await AsyncStorage.getItem('categories');
     const categories = storedCategories ? JSON.parse(storedCategories) : [];
     const category = categories.find(c => c.id === budget.categoryId) || {};
+    
+    // Calculate expiry date based on budget period
+    const budgetPeriod = budget.period || 'monthly';
+    const startDate = budget.startDate ? new Date(budget.startDate) : now;
+    const expiryDate = calculateBudgetExpiry(budgetPeriod, startDate);
     
     // Set budget fields
     const newBudget = {
@@ -981,6 +1310,12 @@ export const saveBudget = async (budget) => {
       month: currentMonth,
       year: currentYear,
       spent: budget.spent || 0, // Initialize spent as 0 if not provided
+      period: budgetPeriod, // Budget period (daily, weekly, monthly, quarterly, yearly)
+      startDate: startDate.toISOString(),
+      expiryDate: expiryDate.toISOString(),
+      isActive: true,
+      autoReset: budget.autoReset !== false, // Default to true unless explicitly set to false
+      resetCount: budget.resetCount || 0, // Track how many times this budget has been reset
       createdAt: budget.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -1005,14 +1340,272 @@ export const saveBudget = async (budget) => {
 };
 
 /**
- * Get all budgets
- * @returns {Promise<Array>} Array of budgets
+ * Check for expired budgets and reset them if auto-reset is enabled
+ * This should be called on app startup or periodically
+ * @returns {Promise<Object>} Result object with reset information
+ */
+export const processExpiredBudgets = async () => {
+  try {
+    // Get raw budget data to avoid circular dependency
+    const storedBudgets = await AsyncStorage.getItem('budgets');
+    const budgets = storedBudgets ? JSON.parse(storedBudgets) : [];
+    const now = new Date();
+    let hasUpdates = false;
+    let resetBudgets = [];
+    let expiredBudgets = [];
+    
+    for (let i = 0; i < budgets.length; i++) {
+      const budget = budgets[i];
+      
+      // Skip if budget doesn't have expiry date (old budgets)
+      if (!budget.expiryDate || !budget.isActive) continue;
+      
+      const expiryDate = new Date(budget.expiryDate);
+      
+      // Check if budget has expired
+      if (now >= expiryDate) {
+        if (budget.autoReset) {
+          // Reset the budget for the next period
+          const newStartDate = new Date(budget.expiryDate);
+          const newExpiryDate = calculateBudgetExpiry(budget.period || 'monthly', newStartDate);
+          
+          budget.spent = 0; // Reset spent amount
+          budget.startDate = newStartDate.toISOString();
+          budget.expiryDate = newExpiryDate.toISOString();
+          budget.resetCount = (budget.resetCount || 0) + 1;
+          budget.lastResetAt = now.toISOString();
+          budget.updatedAt = now.toISOString();
+          
+          resetBudgets.push({
+            id: budget.id,
+            category: budget.category,
+            period: budget.period,
+            amount: budget.amount,
+            newExpiryDate: newExpiryDate.toISOString()
+          });
+          
+          hasUpdates = true;
+          console.log(`Budget reset: ${budget.category} (${budget.period}) - Reset #${budget.resetCount}`);
+        } else {
+          // Mark budget as expired but don't reset
+          budget.isActive = false;
+          budget.expiredAt = now.toISOString();
+          budget.updatedAt = now.toISOString();
+          
+          expiredBudgets.push({
+            id: budget.id,
+            category: budget.category,
+            period: budget.period,
+            amount: budget.amount
+          });
+          
+          hasUpdates = true;
+          console.log(`Budget expired: ${budget.category} (${budget.period})`);
+        }
+      }
+    }
+    
+    // Save updated budgets if there were changes
+    if (hasUpdates) {
+      await AsyncStorage.setItem('budgets', JSON.stringify(budgets));
+      
+      // Update budget summary after processing expired budgets
+      await updateBudgetSummary();
+      
+      // Emit events for budget changes
+      if (resetBudgets.length > 0) {
+        emitEvent(EVENTS.BUDGETS_RESET, { budgets: resetBudgets });
+      }
+      if (expiredBudgets.length > 0) {
+        emitEvent(EVENTS.BUDGETS_EXPIRED, { budgets: expiredBudgets });
+      }
+    }
+    
+    return {
+      processed: budgets.length,
+      reset: resetBudgets.length,
+      expired: expiredBudgets.length,
+      resetBudgets,
+      expiredBudgets
+    };
+  } catch (error) {
+    console.error('Error processing expired budgets:', error);
+    return {
+      processed: 0,
+      reset: 0,
+      expired: 0,
+      resetBudgets: [],
+      expiredBudgets: [],
+      error: error.message
+    };
+  }
+};
+
+/**
+ * Manually reset a budget (restart the period)
+ * @param {string} budgetId - ID of budget to reset
+ * @returns {Promise<Object>} Reset budget
+ */
+export const resetBudget = async (budgetId) => {
+  try {
+    // Get raw budget data to avoid circular dependency
+    const storedBudgets = await AsyncStorage.getItem('budgets');
+    const budgets = storedBudgets ? JSON.parse(storedBudgets) : [];
+    const budgetIndex = budgets.findIndex(b => b.id === budgetId);
+    
+    if (budgetIndex === -1) {
+      throw new Error(`Budget with ID ${budgetId} not found`);
+    }
+    
+    const budget = budgets[budgetIndex];
+    const now = new Date();
+    const newExpiryDate = calculateBudgetExpiry(budget.period || 'monthly', now);
+    
+    // Reset the budget
+    budget.spent = 0;
+    budget.startDate = now.toISOString();
+    budget.expiryDate = newExpiryDate.toISOString();
+    budget.isActive = true;
+    budget.resetCount = (budget.resetCount || 0) + 1;
+    budget.lastResetAt = now.toISOString();
+    budget.updatedAt = now.toISOString();
+    
+    await AsyncStorage.setItem('budgets', JSON.stringify(budgets));
+    
+    // Update budget summary
+    await updateBudgetSummary();
+    
+    // Emit event for manual budget reset
+    emitEvent(EVENTS.BUDGET_RESET, { 
+      budgetId, 
+      budget: budget,
+      manual: true 
+    });
+    
+    console.log(`Budget manually reset: ${budget.category} (${budget.period})`);
+    return budget;
+  } catch (error) {
+    console.error('Error resetting budget:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get budget status (active, expired, days remaining)
+ * @param {string} budgetId - ID of budget to check
+ * @returns {Promise<Object>} Budget status object
+ */
+export const getBudgetStatus = async (budgetId) => {
+  try {
+    // Get raw budget data to avoid circular dependency
+    const storedBudgets = await AsyncStorage.getItem('budgets');
+    const budgets = storedBudgets ? JSON.parse(storedBudgets) : [];
+    const budget = budgets.find(b => b.id === budgetId);
+    
+    if (!budget) {
+      throw new Error(`Budget with ID ${budgetId} not found`);
+    }
+    
+    if (!budget.expiryDate) {
+      return {
+        status: 'legacy',
+        message: 'This budget was created before time limits were added'
+      };
+    }
+    
+    const now = new Date();
+    const expiryDate = new Date(budget.expiryDate);
+    const daysRemaining = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24));
+    
+    let status, message;
+    
+    if (!budget.isActive) {
+      status = 'expired';
+      message = 'Budget has expired';
+    } else if (daysRemaining <= 0) {
+      status = 'expired';
+      message = 'Budget has expired and needs processing';
+    } else if (daysRemaining <= 3) {
+      status = 'expiring_soon';
+      message = `Budget expires in ${daysRemaining} day${daysRemaining === 1 ? '' : 's'}`;
+    } else {
+      status = 'active';
+      message = `${daysRemaining} days remaining`;
+    }
+    
+    return {
+      status,
+      message,
+      daysRemaining,
+      expiryDate: budget.expiryDate,
+      period: budget.period,
+      autoReset: budget.autoReset,
+      resetCount: budget.resetCount || 0
+    };
+  } catch (error) {
+    console.error('Error getting budget status:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get all budgets with their current status
+ * @returns {Promise<Array>} Array of budgets with status information
  */
 export const fetchBudgets = async () => {
   try {
     // Direct fetch without delay for better performance
     const storedBudgets = await AsyncStorage.getItem('budgets');
-    return storedBudgets ? JSON.parse(storedBudgets) : [];
+    const budgets = storedBudgets ? JSON.parse(storedBudgets) : [];
+    
+    // Add status information to each budget without circular dependency
+    const budgetsWithStatus = budgets.map((budget) => {
+      try {
+        // Calculate status directly here to avoid circular dependency
+        const now = new Date();
+        let status = 'legacy';
+        let message = 'This budget was created before time limits were added';
+        let daysRemaining = 0;
+        
+        if (budget.expiryDate) {
+          const expiryDate = new Date(budget.expiryDate);
+          daysRemaining = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24));
+          
+          if (!budget.isActive) {
+            status = 'expired';
+            message = 'Budget has expired';
+          } else if (daysRemaining <= 0) {
+            status = 'expired';
+            message = 'Budget has expired and needs processing';
+          } else if (daysRemaining <= 3) {
+            status = 'expiring_soon';
+            message = `Budget expires in ${daysRemaining} day${daysRemaining === 1 ? '' : 's'}`;
+          } else {
+            status = 'active';
+            message = `${daysRemaining} days remaining`;
+          }
+        }
+        
+        return {
+          ...budget,
+          statusInfo: {
+            status,
+            message,
+            daysRemaining,
+            expiryDate: budget.expiryDate,
+            period: budget.period,
+            autoReset: budget.autoReset,
+            resetCount: budget.resetCount || 0
+          }
+        };
+      } catch (error) {
+        // If status calculation fails, return budget without status
+        console.error('Error calculating budget status:', error);
+        return budget;
+      }
+    });
+    
+    return budgetsWithStatus;
   } catch (error) {
     console.error('Error fetching budgets:', error);
     return [];
@@ -1026,7 +1619,9 @@ export const fetchBudgets = async () => {
  */
 export const deleteBudget = async (budgetId) => {
   try {
-    const budgets = await fetchBudgets();
+    // Get raw budget data to avoid circular dependency
+    const storedBudgets = await AsyncStorage.getItem('budgets');
+    const budgets = storedBudgets ? JSON.parse(storedBudgets) : [];
     const filteredBudgets = budgets.filter(b => b.id !== budgetId);
     
     await AsyncStorage.setItem('budgets', JSON.stringify(filteredBudgets));
@@ -1049,7 +1644,9 @@ export const deleteBudget = async (budgetId) => {
  */
 export const updateBudget = async (budgetId, updates) => {
   try {
-    const budgets = await fetchBudgets();
+    // Get raw budget data to avoid circular dependency
+    const storedBudgets = await AsyncStorage.getItem('budgets');
+    const budgets = storedBudgets ? JSON.parse(storedBudgets) : [];
     const budgetIndex = budgets.findIndex(b => b.id === budgetId);
     
     if (budgetIndex === -1) {

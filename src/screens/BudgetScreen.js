@@ -6,7 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
 import { Button, Card, Input } from '../components';
 import { storageService } from '../services/storageService';
-import { fetchCategories, saveBudget, fetchBudgets, deleteBudget as deleteBudgetFromService, updateBudget, initializeAppData, fetchBudgetSummary } from '../services/dataService';
+import { fetchCategories, saveBudget, fetchBudgets, deleteBudget as deleteBudgetFromService, updateBudget, initializeAppData, fetchBudgetSummary, resetBudget, processScheduledTasks } from '../services/dataService';
 import colors from '../utils/colors';
 import { addEventListener, removeEventListener, EVENTS, emitEvent } from '../utils/eventEmitter';
 import { 
@@ -24,6 +24,8 @@ const BudgetScreen = ({ navigation }) => {  const [budgets, setBudgets] = useSta
   const [editingBudget, setEditingBudget] = useState(null);
   const [newBudgetCategory, setNewBudgetCategory] = useState('');
   const [newBudgetAmount, setNewBudgetAmount] = useState('');
+  const [newBudgetPeriod, setNewBudgetPeriod] = useState('monthly');
+  const [newBudgetAutoReset, setNewBudgetAutoReset] = useState(true);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -43,10 +45,48 @@ const fallbackCategories = [
 ];  useEffect(() => {
     loadData();
     
+    // Process scheduled tasks (including budget expiry checks) on component mount
+    processScheduledTasks().then(result => {
+      console.log('Scheduled tasks processed:', result);
+      if (result.budgets && (result.budgets.reset > 0 || result.budgets.expired > 0)) {
+        // Reload data if any budgets were reset or expired
+        loadData();
+      }
+    }).catch(error => {
+      console.error('Error processing scheduled tasks:', error);
+    });
+    
     // Listen to budget updates and transaction changes with throttling
     const budgetUpdateSubscription = addEventListener(EVENTS.BUDGET_UPDATED, () => {
       console.log("Budget updated event received in BudgetScreen");
       loadData();
+    });
+    
+    const budgetResetSubscription = addEventListener(EVENTS.BUDGET_RESET, () => {
+      console.log("Budget reset event received in BudgetScreen");
+      loadData();
+    });
+    
+    const budgetsResetSubscription = addEventListener(EVENTS.BUDGETS_RESET, (data) => {
+      console.log("Multiple budgets reset event received in BudgetScreen", data);
+      loadData();
+      if (data.budgets && data.budgets.length > 0) {
+        showInfoAlert(
+          'Budgets Reset',
+          `${data.budgets.length} budget${data.budgets.length === 1 ? '' : 's'} have been automatically reset for the new period.`
+        );
+      }
+    });
+    
+    const budgetsExpiredSubscription = addEventListener(EVENTS.BUDGETS_EXPIRED, (data) => {
+      console.log("Budgets expired event received in BudgetScreen", data);
+      loadData();
+      if (data.budgets && data.budgets.length > 0) {
+        showWarningAlert(
+          'Budgets Expired',
+          `${data.budgets.length} budget${data.budgets.length === 1 ? ' has' : 's have'} expired. You can reset them to start a new period.`
+        );
+      }
     });
     
     const transactionAddedSubscription = addEventListener(EVENTS.TRANSACTION_ADDED, () => {
@@ -67,6 +107,9 @@ const fallbackCategories = [
     // Clean up subscriptions
     return () => {
       removeEventListener(budgetUpdateSubscription);
+      removeEventListener(budgetResetSubscription);
+      removeEventListener(budgetsResetSubscription);
+      removeEventListener(budgetsExpiredSubscription);
       removeEventListener(transactionAddedSubscription);
       removeEventListener(transactionDeletedSubscription);
       removeEventListener(forceRefreshSubscription);
@@ -203,6 +246,8 @@ const fallbackCategories = [
         await updateBudget(editingBudget.id, {
           categoryId: newBudgetCategory,
           amount: budgetAmount,
+          period: newBudgetPeriod,
+          autoReset: newBudgetAutoReset,
           updatedAt: new Date().toISOString()
         });
         showSuccessAlert('Success', 'Budget updated successfully!');
@@ -211,6 +256,8 @@ const fallbackCategories = [
         await saveBudget({
           categoryId: newBudgetCategory,
           amount: budgetAmount,
+          period: newBudgetPeriod,
+          autoReset: newBudgetAutoReset,
         });
         showSuccessAlert('Success', 'Budget created successfully!');
       }
@@ -226,6 +273,8 @@ const fallbackCategories = [
     setEditingBudget(budget);
     setNewBudgetCategory(budget.categoryId);
     setNewBudgetAmount(budget.amount.toString());
+    setNewBudgetPeriod(budget.period || 'monthly');
+    setNewBudgetAutoReset(budget.autoReset !== false);
     setShowAddBudget(true);
   };
 
@@ -250,9 +299,35 @@ const fallbackCategories = [
       ]
     );
   };
+
+  const handleResetBudget = (budgetId) => {
+    showInfoAlert(
+      'Reset Budget',
+      'This will reset the budget spending to ₹0 and start a new budget period. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Reset', 
+          style: 'default',
+          onPress: async () => {
+            try {
+              await resetBudget(budgetId);
+              showSuccessAlert('Success', 'Budget has been reset for a new period');
+              // Don't call loadData() here as BUDGET_RESET event will handle it
+            } catch (error) {
+              console.error('Reset budget error:', error);
+              showErrorAlert('Error', 'Failed to reset budget: ' + error.message);
+            }
+          }
+        }
+      ]
+    );
+  };
   const resetForm = () => {
     setNewBudgetCategory('');
     setNewBudgetAmount('');
+    setNewBudgetPeriod('monthly');
+    setNewBudgetAutoReset(true);
     setEditingBudget(null);
     setShowAddBudget(false);
   };
@@ -469,6 +544,52 @@ const fallbackCategories = [
                 type="decimal"
                 style={styles.budgetInput}
               />
+
+              {/* Budget Period Selection */}
+              <Text style={styles.inputLabel}>Budget Period</Text>
+              <View style={styles.periodSelector}>
+                {['daily', 'weekly', 'monthly', 'quarterly', 'yearly'].map((period) => (
+                  <TouchableOpacity
+                    key={period}
+                    style={[
+                      styles.periodOption,
+                      newBudgetPeriod === period && styles.periodOptionSelected
+                    ]}
+                    onPress={() => setNewBudgetPeriod(period)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[
+                      styles.periodOptionText,
+                      newBudgetPeriod === period && styles.periodOptionTextSelected
+                    ]}>
+                      {period.charAt(0).toUpperCase() + period.slice(1)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Auto-Reset Option */}
+              <View style={styles.autoResetContainer}>
+                <View style={styles.autoResetInfo}>
+                  <Text style={styles.autoResetLabel}>Auto-Reset</Text>
+                  <Text style={styles.autoResetDescription}>
+                    Automatically reset budget when period expires
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={[
+                    styles.toggleContainer,
+                    newBudgetAutoReset && styles.toggleContainerActive
+                  ]}
+                  onPress={() => setNewBudgetAutoReset(!newBudgetAutoReset)}
+                  activeOpacity={0.8}
+                >
+                  <View style={[
+                    styles.toggleThumb,
+                    newBudgetAutoReset && styles.toggleThumbActive
+                  ]} />
+                </TouchableOpacity>
+              </View>
                 <View style={styles.formButtons}>
                 <TouchableOpacity 
                   style={styles.saveButton} 
@@ -559,14 +680,53 @@ const fallbackCategories = [
                         <Text style={styles.budgetAmount}>
                           ₹{progress.spent.toFixed(2)} of ₹{budget.amount.toFixed(2)}
                         </Text>
-                      </View>                    </View>                    <View style={styles.budgetActions}>
-                      <TouchableOpacity 
-                        style={styles.viewButton} 
-                        onPress={() => handleViewSpending(budget, category)}
-                        activeOpacity={0.7}
-                      >
-                        <Ionicons name="list-outline" size={18} color={colors.info.main} />
-                      </TouchableOpacity>
+                        {/* Budget Time Period and Status */}
+                        {budget.statusInfo && (
+                          <View style={styles.budgetTimeInfo}>
+                            <View style={styles.periodInfo}>
+                              <Ionicons 
+                                name="time-outline" 
+                                size={12} 
+                                color={colors.text.secondary} 
+                              />
+                              <Text style={styles.budgetPeriod}>
+                                {budget.period || 'monthly'} budget
+                              </Text>
+                            </View>
+                            <View style={[
+                              styles.statusBadge,
+                              budget.statusInfo.status === 'expired' && styles.expiredBadge,
+                              budget.statusInfo.status === 'expiring_soon' && styles.expiringSoonBadge,
+                              budget.statusInfo.status === 'active' && styles.activeBadge
+                            ]}>
+                              <Text style={[
+                                styles.statusText,
+                                budget.statusInfo.status === 'expired' && styles.expiredText,
+                                budget.statusInfo.status === 'expiring_soon' && styles.expiringSoonText,
+                                budget.statusInfo.status === 'active' && styles.activeText
+                              ]}>
+                                {budget.statusInfo.status === 'expired' ? 'Expired' :
+                                 budget.statusInfo.status === 'expiring_soon' ? `${budget.statusInfo.daysRemaining}d left` :
+                                 budget.statusInfo.status === 'active' ? `${budget.statusInfo.daysRemaining}d left` :
+                                 'Unknown'}
+                              </Text>
+                            </View>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                    
+                    <View style={styles.budgetActions}>
+                      {/* Reset button for expired budgets */}
+                      {budget.statusInfo && budget.statusInfo.status === 'expired' && (
+                        <TouchableOpacity 
+                          style={styles.resetButton} 
+                          onPress={() => handleResetBudget(budget.id)}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons name="refresh-outline" size={18} color={colors.success.main} />
+                        </TouchableOpacity>
+                      )}
                       <TouchableOpacity 
                         style={styles.editButton} 
                         onPress={() => handleEditBudget(budget)}
@@ -1031,6 +1191,87 @@ const styles = StyleSheet.create({
   budgetInput: {
     marginBottom: 14,
   },
+  periodSelector: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+  },
+  periodOption: {
+    flex: 1,
+    minWidth: '30%',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.neutral[300],
+    backgroundColor: colors.neutral[50],
+    alignItems: 'center',
+  },
+  periodOptionSelected: {
+    backgroundColor: colors.primary.main + '20',
+    borderColor: colors.primary.main,
+  },
+  periodOptionText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.text.secondary,
+  },
+  periodOptionTextSelected: {
+    color: colors.primary.main,
+    fontWeight: '600',
+  },
+  autoResetContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: colors.neutral[50],
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+    marginBottom: 16,
+  },
+  autoResetInfo: {
+    flex: 1,
+  },
+  autoResetLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text.primary,
+    marginBottom: 2,
+  },
+  autoResetDescription: {
+    fontSize: 13,
+    color: colors.text.secondary,
+  },
+  toggleContainer: {
+    width: 48,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.neutral[300],
+    padding: 2,
+    justifyContent: 'center',
+  },
+  toggleContainerActive: {
+    backgroundColor: colors.primary.main,
+  },
+  toggleThumb: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'white',
+    alignSelf: 'flex-start',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  toggleThumbActive: {
+    alignSelf: 'flex-end',
+  },
   formButtons: {
     gap: 10,
   },
@@ -1206,6 +1447,61 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     fontSize: 14,
     marginTop: 4,
+  },
+  budgetTimeInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
+  periodInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  budgetPeriod: {
+    fontSize: 12,
+    color: colors.text.secondary,
+    marginLeft: 4,
+    fontWeight: '500',
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: colors.neutral[100],
+  },
+  activeBadge: {
+    backgroundColor: colors.success.main + '20',
+  },
+  expiringSoonBadge: {
+    backgroundColor: colors.warning.main + '20',
+  },
+  expiredBadge: {
+    backgroundColor: colors.danger.main + '20',
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.text.secondary,
+  },
+  activeText: {
+    color: colors.success.main,
+  },
+  expiringSoonText: {
+    color: colors.warning.main,
+  },
+  expiredText: {
+    color: colors.danger.main,
+  },
+  resetButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: colors.success.main + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.success.main + '30',
   },
   progressContainer: {
     marginBottom: 14,

@@ -15,6 +15,7 @@ import CategoriesScreen from '../screens/CategoriesScreen';
 import NotificationScreen from '../screens/NotificationScreen';
 import GoalsScreen from '../screens/GoalsScreen';
 import AnalyticsScreen from '../screens/AnalyticsScreen';
+import AutopayManagementScreen from '../screens/AutopayManagementScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -132,6 +133,10 @@ export default function AppNavigator({ user, onLogout }) {
         <Stack.Screen 
           name="Analytics" 
           component={AnalyticsScreen}
+        />
+        <Stack.Screen 
+          name="AutopayManagement" 
+          component={AutopayManagementScreen}
         />
       </Stack.Navigator>
     </NavigationContainer>

@@ -826,49 +826,95 @@ const GoalsScreen = ({ navigation }) => {
           setContributionAmount('');
         }}
       >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>
-              Add Money to {selectedGoal?.title}
-            </Text>
-            
-            <View style={styles.goalInfo}>
-              <Text style={styles.goalInfoText}>
-                Current: ₹{selectedGoal?.currentAmount?.toLocaleString('en-IN') || '0'}
+        <View style={styles.contributeModalContainer}>
+          <View style={styles.contributeModalContent}>
+            {/* Header Section */}
+            <View style={styles.contributeHeader}>
+              <View style={styles.contributeHeaderIcon}>
+                <LinearGradient
+                  colors={colors.gradients.goals}
+                  style={styles.contributeIconGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
+                  <Ionicons name="wallet" size={24} color="white" />
+                </LinearGradient>
+              </View>
+              <Text style={styles.contributeModalTitle}>
+                Add Money
               </Text>
-              <Text style={styles.goalInfoText}>
-                Target: ₹{selectedGoal?.targetAmount?.toLocaleString('en-IN') || '0'}
-              </Text>
-              <Text style={styles.goalInfoText}>
-                Remaining: ₹{(selectedGoal?.targetAmount - selectedGoal?.currentAmount)?.toLocaleString('en-IN') || '0'}
+              <Text style={styles.contributeGoalName}>
+                to {selectedGoal?.title}
               </Text>
             </View>
             
-            <TextInput
-              style={styles.input}
-              placeholder="Amount to add (₹)"
-              value={contributionAmount}
-              onChangeText={setContributionAmount}
-              keyboardType="numeric"
-            />
+            {/* Goal Information Card */}
+            <View style={styles.contributeGoalInfo}>
+              <View style={styles.goalInfoRow}>
+                <View style={styles.goalInfoItem}>
+                  <Ionicons name="wallet-outline" size={16} color={colors.primary.main} />
+                  <Text style={styles.goalInfoLabel}>Current</Text>
+                  <Text style={styles.goalInfoValue}>
+                    ₹{selectedGoal?.currentAmount?.toLocaleString('en-IN') || '0'}
+                  </Text>
+                </View>
+                <View style={styles.goalInfoDivider} />
+                <View style={styles.goalInfoItem}>
+                  <Ionicons name="flag-outline" size={16} color={colors.success.main} />
+                  <Text style={styles.goalInfoLabel}>Target</Text>
+                  <Text style={styles.goalInfoValue}>
+                    ₹{selectedGoal?.targetAmount?.toLocaleString('en-IN') || '0'}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.remainingInfo}>
+                <Ionicons name="trending-up" size={18} color={colors.warning.main} />
+                <Text style={styles.remainingLabel}>Remaining to reach goal:</Text>
+                <Text style={styles.remainingAmount}>
+                  ₹{(selectedGoal?.targetAmount - selectedGoal?.currentAmount)?.toLocaleString('en-IN') || '0'}
+                </Text>
+              </View>
+            </View>
             
-            <View style={styles.modalButtons}>
+            {/* Amount Input Section */}
+            <View style={styles.contributeInputSection}>
+              <Text style={styles.contributeInputLabel}>Contribution Amount</Text>
+              <View style={styles.contributeInputContainer}>
+                <Text style={styles.contributeCurrencySymbol}>₹</Text>
+                <TextInput
+                  style={styles.contributeInput}
+                  placeholder="0"
+                  value={contributionAmount}
+                  onChangeText={setContributionAmount}
+                  keyboardType="numeric"
+                  placeholderTextColor={colors.text.secondary}
+                />
+              </View>
+              <Text style={styles.contributeInputHint}>
+                Enter the amount you want to add to this goal
+              </Text>
+            </View>
+            
+            {/* Action Buttons */}
+            <View style={styles.contributeModalButtons}>
               <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
+                style={styles.contributeCancelButton}
                 onPress={() => {
                   setShowContribute(false);
                   setSelectedGoal(null);
                   setContributionAmount('');
                 }}
               >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>              <TouchableOpacity
-                style={[styles.modalButton, styles.saveButton]}
+                <Text style={styles.contributeCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={styles.contributeAddButton}
                 onPress={handleContribute}
               >
                 <LinearGradient
                   colors={colors.gradients.goals}
-                  style={styles.saveButtonGradient}
+                  style={styles.contributeAddGradient}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                 >
@@ -876,9 +922,9 @@ const GoalsScreen = ({ navigation }) => {
                     name="add-circle" 
                     size={20} 
                     color="white" 
-                    style={styles.saveButtonIcon} 
+                    style={styles.contributeAddIcon} 
                   />
-                  <Text style={styles.saveButtonText}>Add Money</Text>
+                  <Text style={styles.contributeAddText}>Add Money</Text>
                 </LinearGradient>
               </TouchableOpacity>
             </View>
@@ -1438,6 +1484,198 @@ const styles = StyleSheet.create({  container: {
     backgroundColor: '#f1f5f9',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+
+  // Enhanced Contribute Modal Styles
+  contributeModalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  contributeModalContent: {
+    backgroundColor: 'white',
+    borderRadius: 24,
+    width: '100%',
+    maxWidth: 400,
+    paddingVertical: 24,
+    paddingHorizontal: 20,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+  },
+  contributeHeader: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  contributeHeaderIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    marginBottom: 16,
+    overflow: 'hidden',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+  },
+  contributeIconGradient: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  contributeModalTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: colors.text.primary,
+    marginBottom: 4,
+  },
+  contributeGoalName: {
+    fontSize: 16,
+    color: colors.text.secondary,
+    fontWeight: '500',
+  },
+  contributeGoalInfo: {
+    backgroundColor: colors.neutral[50],
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+  },
+  goalInfoRow: {
+    flexDirection: 'row',
+    marginBottom: 16,
+  },
+  goalInfoItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  goalInfoLabel: {
+    fontSize: 12,
+    color: colors.text.secondary,
+    fontWeight: '500',
+    marginTop: 6,
+    marginBottom: 4,
+  },
+  goalInfoValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text.primary,
+  },
+  goalInfoDivider: {
+    width: 1,
+    backgroundColor: colors.neutral[300],
+    marginHorizontal: 16,
+  },
+  remainingInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: colors.warning.main + '30',
+  },
+  remainingLabel: {
+    fontSize: 14,
+    color: colors.text.secondary,
+    marginLeft: 8,
+    marginRight: 8,
+  },
+  remainingAmount: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.warning.main,
+  },
+  contributeInputSection: {
+    marginBottom: 32,
+  },
+  contributeInputLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text.primary,
+    marginBottom: 12,
+  },
+  contributeInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.neutral[300],
+    borderRadius: 16,
+    backgroundColor: colors.neutral[50],
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+    marginBottom: 8,
+  },
+  contributeCurrencySymbol: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.primary.main,
+    marginRight: 8,
+  },
+  contributeInput: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.text.primary,
+    paddingVertical: 12,
+    backgroundColor: 'transparent',
+  },
+  contributeInputHint: {
+    fontSize: 13,
+    color: colors.text.secondary,
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  contributeModalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  contributeCancelButton: {
+    flex: 1,
+    paddingVertical: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+    backgroundColor: colors.neutral[100],
+    borderWidth: 1,
+    borderColor: colors.neutral[300],
+  },
+  contributeCancelText: {
+    color: colors.text.secondary,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  contributeAddButton: {
+    flex: 2,
+    borderRadius: 16,
+    overflow: 'hidden',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+  },
+  contributeAddGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+  },
+  contributeAddIcon: {
+    marginRight: 8,
+  },
+  contributeAddText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '700',
   },
   deadlineSection: {
     marginTop: 16,

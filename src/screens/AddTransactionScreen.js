@@ -8,7 +8,7 @@ import * as Haptics from 'expo-haptics';
 import RNPickerSelect from 'react-native-picker-select';
 import { Button, Card, Input } from '../components';
 import { storageService } from '../services/storageService';
-import { fetchCategories, saveTransaction, updateTransaction, getCurrentBalance, validateTransaction } from '../services/dataService';
+import { fetchCategories, saveTransaction, updateTransaction, getCurrentBalance, validateTransaction, saveAutopayTransaction } from '../services/dataService';
 import { addEventListener, removeEventListener, EVENTS, emitEvent } from '../utils/eventEmitter';
 import { 
   showSuccessAlert, 
@@ -53,6 +53,13 @@ const AddTransactionScreen = ({ navigation, route }) => {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
   const [currentBalance, setCurrentBalance] = useState(0);
+  
+  // Autopay state
+  const [isAutopay, setIsAutopay] = useState(false);
+  const [autopayFrequency, setAutopayFrequency] = useState('monthly');
+  const [autopayStartDate, setAutopayStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [autopayEndDate, setAutopayEndDate] = useState('');
+  const [autopayCount, setAutopayCount] = useState('');
     useEffect(() => {
     loadCategories();
     loadCurrentBalance();
@@ -192,7 +199,46 @@ const AddTransactionScreen = ({ navigation, route }) => {
       }
     }
     
-    return true;};const handleSubmit = async () => {
+    // Validate autopay settings if autopay is enabled
+    if (isAutopay && !isEditing) {
+      if (!autopayStartDate) {
+        showErrorAlert('Validation Error', 'Please select an autopay start date');
+        return false;
+      }
+      
+      const startDate = new Date(autopayStartDate);
+      const today = new Date();
+      const oneYearFromToday = new Date();
+      oneYearFromToday.setFullYear(today.getFullYear() + 1);
+      
+      if (startDate < today.setHours(0, 0, 0, 0)) {
+        showErrorAlert('Validation Error', 'Autopay start date cannot be in the past');
+        return false;
+      }
+      
+      if (startDate > oneYearFromToday) {
+        showErrorAlert('Validation Error', 'Autopay start date cannot be more than one year in the future');
+        return false;
+      }
+      
+      if (autopayEndDate) {
+        const endDate = new Date(autopayEndDate);
+        if (endDate <= startDate) {
+          showErrorAlert('Validation Error', 'Autopay end date must be after start date');
+          return false;
+        }
+      }
+      
+      if (autopayCount && (parseInt(autopayCount) <= 0 || parseInt(autopayCount) > 999)) {
+        showErrorAlert('Validation Error', 'Autopay count must be between 1 and 999');
+        return false;
+      }
+    }
+    
+    return true;
+  };
+
+  const handleSubmit = async () => {
     if (!validateForm()) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
@@ -228,39 +274,75 @@ const AddTransactionScreen = ({ navigation, route }) => {
         showSuccessAlert('Success', 'Transaction updated successfully!', [
           { text: 'OK', onPress: () => navigation.goBack() }
         ]);      } else {
-        const savedTransaction = await saveTransaction(transactionData);
-        console.log('Transaction saved:', savedTransaction);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        
-        // Refresh balance after successful transaction
-        await loadCurrentBalance();
-          // Manually emit events to ensure all screens are updated
-        emitEvent(EVENTS.TRANSACTION_ADDED, { transaction: savedTransaction });
-        emitEvent(EVENTS.BALANCE_CHANGED);
-        if (savedTransaction.type === 'expense') {
-          emitEvent(EVENTS.BUDGET_UPDATED);
-        }
-        
-        showSuccessAlert(
-          'Success', 
-          `Transaction of ₹${transactionData.amount} added successfully!`,
-          [
-            { 
-              text: 'Add Another', 
-              onPress: () => {
-                resetForm();
+        // If autopay is enabled, save as recurring transaction
+        if (isAutopay) {
+          const autopayData = {
+            ...transactionData,
+            isAutopay: true,
+            autopayFrequency,
+            autopayStartDate,
+            autopayEndDate: autopayEndDate || null,
+            autopayCount: autopayCount ? parseInt(autopayCount) : null,
+            nextExecutionDate: autopayStartDate
+          };
+          
+          const savedAutopay = await saveAutopayTransaction(autopayData);
+          console.log('Autopay transaction saved:', savedAutopay);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          
+          showSuccessAlert(
+            'Autopay Created', 
+            `Recurring ${transactionData.type} of ₹${transactionData.amount} scheduled successfully!`,
+            [
+              { 
+                text: 'Add Another', 
+                onPress: () => {
+                  resetForm();
+                }
+              },
+              { 
+                text: 'Done', 
+                style: 'cancel',
+                onPress: () => navigation.navigate('Dashboard') 
               }
-            },
-            { 
-              text: 'View All', 
-              onPress: () => navigation.navigate('TransactionHistory') 
-            },            { 
-              text: 'Done', 
-              style: 'cancel',
-              onPress: () => navigation.navigate('Dashboard') 
-            }
-          ]
-        );
+            ]
+          );
+        } else {
+          // Regular one-time transaction
+          const savedTransaction = await saveTransaction(transactionData);
+          console.log('Transaction saved:', savedTransaction);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          
+          // Refresh balance after successful transaction
+          await loadCurrentBalance();
+            // Manually emit events to ensure all screens are updated
+          emitEvent(EVENTS.TRANSACTION_ADDED, { transaction: savedTransaction });
+          emitEvent(EVENTS.BALANCE_CHANGED);
+          if (savedTransaction.type === 'expense') {
+            emitEvent(EVENTS.BUDGET_UPDATED);
+          }
+          
+          showSuccessAlert(
+            'Success', 
+            `Transaction of ₹${transactionData.amount} added successfully!`,
+            [
+              { 
+                text: 'Add Another', 
+                onPress: () => {
+                  resetForm();
+                }
+              },
+              { 
+                text: 'View All', 
+                onPress: () => navigation.navigate('TransactionHistory') 
+              },            { 
+                text: 'Done', 
+                style: 'cancel',
+                onPress: () => navigation.navigate('Dashboard') 
+              }
+            ]
+          );
+        }
       }
     } catch (error) {
       console.error('Save transaction error:', error);
@@ -278,6 +360,13 @@ const AddTransactionScreen = ({ navigation, route }) => {
     setPaymentMode('cash');
     setDate(new Date().toISOString().split('T')[0]);
     setIsAmountFocused(false);
+    
+    // Reset autopay state
+    setIsAutopay(false);
+    setAutopayFrequency('monthly');
+    setAutopayStartDate(new Date().toISOString().split('T')[0]);
+    setAutopayEndDate('');
+    setAutopayCount('');
   };return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />      <LinearGradient
@@ -496,6 +585,136 @@ const AddTransactionScreen = ({ navigation, route }) => {
             </View>
           </Card>
 
+          {/* Autopay Section */}
+          {!isEditing && (
+            <Card style={styles.card} elevation="medium">
+              <View style={styles.autopayHeader}>
+                <Text style={styles.sectionTitle}>Autopay</Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setIsAutopay(!isAutopay);
+                  }}
+                  style={[
+                    styles.autopayToggle,
+                    isAutopay ? styles.autopayToggleActive : styles.autopayToggleInactive
+                  ]}
+                >
+                  <Ionicons
+                    name={isAutopay ? 'checkmark-circle' : 'ellipse-outline'}
+                    size={24}
+                    color={isAutopay ? '#10b981' : '#9ca3af'}
+                  />
+                  <Text style={[
+                    styles.autopayToggleText,
+                    isAutopay ? styles.autopayToggleTextActive : styles.autopayToggleTextInactive
+                  ]}>
+                    {isAutopay ? 'Enabled' : 'Disabled'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              
+              {isAutopay && (
+                <View style={styles.autopayOptions}>
+                  {/* Frequency Selection */}
+                  <View style={styles.autopayRow}>
+                    <Text style={styles.autopayLabel}>Frequency</Text>
+                    <View style={styles.frequencyContainer}>
+                      {[
+                        { value: 'daily', label: 'Daily', icon: 'calendar' },
+                        { value: 'weekly', label: 'Weekly', icon: 'calendar-outline' },
+                        { value: 'monthly', label: 'Monthly', icon: 'calendar-number' }
+                      ].map((freq) => (
+                        <TouchableOpacity
+                          key={freq.value}
+                          onPress={() => setAutopayFrequency(freq.value)}
+                          style={[
+                            styles.frequencyButton,
+                            autopayFrequency === freq.value ? styles.frequencyButtonActive : styles.frequencyButtonInactive
+                          ]}
+                        >
+                          <Ionicons
+                            name={freq.icon}
+                            size={16}
+                            color={autopayFrequency === freq.value ? '#ffffff' : '#6b7280'}
+                          />
+                          <Text style={[
+                            styles.frequencyText,
+                            autopayFrequency === freq.value ? styles.frequencyTextActive : styles.frequencyTextInactive
+                          ]}>
+                            {freq.label}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+
+                  {/* Start Date */}
+                  <View style={styles.autopayRow}>
+                    <Text style={styles.autopayLabel}>Start Date</Text>
+                    <TouchableOpacity 
+                      style={styles.dateInputTouchable}
+                      onPress={() => {
+                        // For now, keep it as text input. Could be enhanced with date picker later
+                      }}
+                    >
+                      <TextInput
+                        style={styles.dateInput}
+                        value={autopayStartDate}
+                        onChangeText={setAutopayStartDate}
+                        placeholder="YYYY-MM-DD"
+                        placeholderTextColor="#9ca3af"
+                        maxLength={10}
+                      />
+                      <Ionicons name="calendar" size={20} color="#6b7280" style={styles.dateIcon} />
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* End Date (Optional) */}
+                  <View style={styles.autopayRow}>
+                    <Text style={styles.autopayLabel}>End Date (Optional)</Text>
+                    <TouchableOpacity 
+                      style={styles.dateInputTouchable}
+                      onPress={() => {
+                        // For now, keep it as text input. Could be enhanced with date picker later
+                      }}
+                    >
+                      <TextInput
+                        style={styles.dateInput}
+                        value={autopayEndDate}
+                        onChangeText={setAutopayEndDate}
+                        placeholder="YYYY-MM-DD or leave empty"
+                        placeholderTextColor="#9ca3af"
+                        maxLength={10}
+                      />
+                      <Ionicons name="calendar" size={20} color="#6b7280" style={styles.dateIcon} />
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Number of Transactions (Optional) */}
+                  <View style={styles.autopayRow}>
+                    <Text style={styles.autopayLabel}>Number of Transactions (Optional)</Text>
+                    <TextInput
+                      style={styles.countInput}
+                      value={autopayCount}
+                      onChangeText={setAutopayCount}
+                      placeholder="e.g., 12"
+                      keyboardType="numeric"
+                      placeholderTextColor="#9ca3af"
+                    />
+                  </View>
+
+                  <View style={styles.autopayInfo}>
+                    <Ionicons name="information-circle" size={16} color="#6b7280" />
+                    <Text style={styles.autopayInfoText}>
+                      Autopay will create transactions automatically based on your schedule. You can stop it anytime from settings.
+                    </Text>
+                  </View>
+                </View>
+              )}
+            </Card>
+          )}
+
           {/* Submit Button */}
           <View style={styles.actionsContainer}>
             <TouchableOpacity 
@@ -525,7 +744,12 @@ const AddTransactionScreen = ({ navigation, route }) => {
                       color="white"
                       style={{marginRight: 8}}
                     />
-                    <Text style={styles.submitButtonText}>Add {type === 'expense' ? 'Expense' : 'Income'}</Text>
+                    <Text style={styles.submitButtonText}>
+                      {isAutopay 
+                        ? `Setup Autopay ${type === 'expense' ? 'Expense' : 'Income'}` 
+                        : `Add ${type === 'expense' ? 'Expense' : 'Income'}`
+                      }
+                    </Text>
                   </>
                 )}
               </LinearGradient>
@@ -816,6 +1040,134 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
+  },
+  // Autopay styles
+  autopayHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  autopayToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  autopayToggleActive: {
+    backgroundColor: '#f0fdf4',
+    borderColor: '#10b981',
+  },
+  autopayToggleInactive: {
+    backgroundColor: '#f9fafb',
+    borderColor: '#d1d5db',
+  },
+  autopayToggleText: {
+    marginLeft: 8,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  autopayToggleTextActive: {
+    color: '#10b981',
+  },
+  autopayToggleTextInactive: {
+    color: '#6b7280',
+  },
+  autopayOptions: {
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    paddingTop: 16,
+  },
+  autopayRow: {
+    marginBottom: 16,
+  },
+  autopayLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  frequencyContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  frequencyButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginHorizontal: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  frequencyButtonActive: {
+    backgroundColor: '#4f46e5',
+    borderColor: '#4f46e5',
+  },
+  frequencyButtonInactive: {
+    backgroundColor: '#f9fafb',
+    borderColor: '#d1d5db',
+  },
+  frequencyText: {
+    marginLeft: 4,
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  frequencyTextActive: {
+    color: '#ffffff',
+  },
+  frequencyTextInactive: {
+    color: '#6b7280',
+  },
+  dateInput: {
+    flex: 1,
+    borderWidth: 0,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    fontSize: 14,
+    backgroundColor: 'transparent',
+    color: '#1f2937',
+  },
+  dateInputTouchable: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+  },
+  dateIcon: {
+    paddingHorizontal: 12,
+  },
+  countInput: {
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    fontSize: 14,
+    backgroundColor: '#ffffff',
+    color: '#1f2937',
+    width: 100,
+  },
+  autopayInfo: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    padding: 12,
+    backgroundColor: '#f8fafc',
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  autopayInfoText: {
+    flex: 1,
+    marginLeft: 8,
+    fontSize: 12,
+    color: '#6b7280',
+    lineHeight: 16,
   },
 });
 

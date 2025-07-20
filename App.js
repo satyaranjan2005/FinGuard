@@ -5,7 +5,7 @@ import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import AppNavigator from './src/navigation/AppNavigator';
 import AuthScreen from './src/screens/AuthScreen';
-import { initializeAppData } from './src/services/dataService';
+import { initializeAppData, processAutopayTransactions } from './src/services/dataService';
 import { initializePermissions } from './src/services/permissionService';
 import { CustomAlert } from './src/components';
 import { subscribeToAlerts } from './src/services/alertService';
@@ -45,6 +45,9 @@ export default function App() {
       
       // Initialize sample data
       await initializeAppData();
+      
+      // Process any pending autopay transactions
+      await processAutopayTransactions();
       
       // Then check authentication
       await checkAuthStatus();
